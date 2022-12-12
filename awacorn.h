@@ -173,6 +173,17 @@ typedef class EventLoop {
     _clear<Interval>(task, &_intv);
   }
   /**
+   * @brief 异步函数语法糖。运行指定的 AsyncFn 异步函数。
+   * 
+   * @tparam Ret 函数的返回值类型。
+   * @param fn 异步函数。
+   * @return Ret 函数的返回值。
+   */
+  template <typename Ret>
+  inline Ret run(const std::function<Ret(EventLoop* ev)>& fn) {
+    return fn(this);
+  }
+  /**
    * @brief 运行事件循环。此函数将在所有事件都运行完成之后返回。
    */
   void start() {
@@ -183,5 +194,7 @@ typedef class EventLoop {
   }
   EventLoop() {}
 } EventLoop;
+template <typename Ret>
+using AsyncFn = std::function<Ret(EventLoop*)>;
 };  // namespace Awacorn
 #endif
