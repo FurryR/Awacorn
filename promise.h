@@ -6,6 +6,7 @@
  */
 #include <functional>
 #include <memory>
+#include <tuple>
 namespace Promise {
 /**
  * @brief Promise的状态。
