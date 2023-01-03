@@ -61,7 +61,7 @@ class Promise {
         if (_finally) _finally();
       }
     }
-    constexpr Status status() const noexcept { return _status; }
+    Status status() const noexcept { return _status; }
     _Promise() : _status(Pending) {}
     _Promise(const _Promise& val) : _status(val._status) {
       switch (val._status) {
@@ -356,7 +356,7 @@ class Promise<void> {
         if (_finally) _finally();
       }
     }
-    constexpr Status status() const noexcept { return _status; }
+    Status status() const noexcept { return _status; }
     _Promise() : _status(Pending) {}
 
    private:
