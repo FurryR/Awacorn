@@ -61,15 +61,15 @@ class Promise {
         if (_finally) _finally();
       }
     }
-    Status status() const noexcept { return _status; }
+    constexpr Status status() const noexcept { return _status; }
     _Promise() : _status(Pending) {}
     _Promise(const _Promise& val) : _status(val._status) {
       switch (val._status) {
         case Resolved:
-          (*reinterpret_cast<T*>(_val)) = (*reinterpret_cast<T*>(val._val));
+          (*reinterpret_cast<T*>(_val)) = (*reinterpret_cast<const T*>(val._val));
         case Rejected:
           (*reinterpret_cast<std::exception*>(_val)) =
-              (*reinterpret_cast<std::exception*>(val._val));
+              (*reinterpret_cast<const std::exception*>(val._val));
       }
     }
     ~_Promise() {
@@ -80,9 +80,6 @@ class Promise {
         }
         case Rejected: {
           reinterpret_cast<std::exception*>(_val)->~exception();
-          break;
-        }
-        case Pending: {
           break;
         }
       }
@@ -150,7 +147,8 @@ class Promise {
     Promise<Decay> t;
     pm->then([t, fn](const T& val) -> void {
       Promise<Decay> tmp = fn(val);
-      tmp.template then<void>([t](const Decay& val) -> void { t.resolve(val); });
+      tmp.template then<void>(
+          [t](const Decay& val) -> void { t.resolve(val); });
       tmp.template error<void>(
           [t](const std::exception& err) -> void { t.reject(err); });
     });
@@ -162,7 +160,8 @@ class Promise {
     pm->then([t, fn](const T& val) -> void {
       Promise<Ret> tmp = fn(val);
       tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -215,8 +214,10 @@ class Promise {
     Promise<Decay> t;
     pm->error([t, fn](const std::exception& err) -> void {
       Promise<Decay> tmp = fn(err);
-      tmp.template then<void>([t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template then<void>(
+          [t](const Decay& val) -> void { t.resolve(val); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -227,7 +228,8 @@ class Promise {
     pm->error([t, fn](const std::exception& err) -> void {
       Promise<Ret> tmp = fn(err);
       tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -278,8 +280,10 @@ class Promise {
     Promise<Decay> t;
     pm->finally([t, fn]() -> void {
       Promise<Decay> tmp = fn();
-      tmp.template then<void>([t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template then<void>(
+          [t](const Decay& val) -> void { t.resolve(val); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -289,7 +293,8 @@ class Promise {
     pm->finally([t, fn]() -> void {
       Promise<Ret> tmp = fn();
       tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -311,7 +316,7 @@ class Promise {
    * @return Status Promise的状态
    */
   Status status() const noexcept { return pm->status(); }
-  Promise() : pm(new _Promise()) {}
+  explicit Promise() : pm(new _Promise()) {}
 };
 /**
  * @brief 没有值的 Promise 对象。
@@ -356,7 +361,7 @@ class Promise<void> {
         if (_finally) _finally();
       }
     }
-    Status status() const noexcept { return _status; }
+    constexpr Status status() const noexcept { return _status; }
     _Promise() : _status(Pending) {}
 
    private:
@@ -417,8 +422,10 @@ class Promise<void> {
     Promise<Decay> t;
     pm->then([t, fn]() -> void {
       Promise<Decay> tmp = fn();
-      tmp.template then<void>([t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template then<void>(
+          [t](const Decay& val) -> void { t.resolve(val); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -428,7 +435,8 @@ class Promise<void> {
     pm->then([t, fn]() -> void {
       Promise<Ret> tmp = fn();
       tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -481,7 +489,8 @@ class Promise<void> {
     Promise<Decay> t;
     pm->error([t, fn](const std::exception& err) -> void {
       Promise<Decay> tmp = fn(err);
-      tmp.template then<void>([t](const Decay& val) -> void { t.resolve(val); });
+      tmp.template then<void>(
+          [t](const Decay& val) -> void { t.resolve(val); });
       tmp.template error<void>(
           [t](const std::exception& err) -> void { t.reject(err); });
     });
@@ -494,7 +503,8 @@ class Promise<void> {
     pm->error([t, fn](const std::exception& err) -> void {
       Promise<Ret> tmp = fn(err);
       tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>([t](const std::exception& err) -> void { t.reject(err); });
+      tmp.template error<void>(
+          [t](const std::exception& err) -> void { t.reject(err); });
     });
     return t;
   }
@@ -581,7 +591,7 @@ class Promise<void> {
    * @return Status Promise的状态
    */
   Status status() const noexcept { return pm->status(); }
-  Promise() : pm(new _Promise()) {}
+  explicit Promise() : pm(new _Promise()) {}
 };
 /**
  * @brief 返回一个已经 Resolved 的 Promise。
@@ -628,9 +638,9 @@ Promise<Value> reject(const std::exception& err) {
 }
 template <typename ResultType, typename Tuple, size_t TOTAL, size_t N>
 struct _promise_all {
-  static void apply(const Tuple& t, std::shared_ptr<ResultType> result,
-                    std::shared_ptr<size_t> done_count,
-                    Promise<ResultType> pm) {
+  static void apply(const Tuple& t, const std::shared_ptr<ResultType>& result,
+                    const std::shared_ptr<size_t>& done_count,
+                    const Promise<ResultType>& pm) {
     _promise_all<ResultType, Tuple, TOTAL, N - 1>::apply(t, result, done_count,
                                                          pm);
     std::get<N>(t).template then<void>(
@@ -648,9 +658,9 @@ struct _promise_all {
 };
 template <typename ResultType, typename Tuple, size_t TOTAL>
 struct _promise_all<ResultType, Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, std::shared_ptr<ResultType> result,
-                    std::shared_ptr<size_t> done_count,
-                    Promise<ResultType> pm) {
+  static void apply(const Tuple& t, const std::shared_ptr<ResultType>& result,
+                    const std::shared_ptr<size_t>& done_count,
+                    const Promise<ResultType>& pm) {
     std::get<0>(t).template then<void>(
         [result, done_count,
          pm](const typename std::tuple_element<0, ResultType>::type& value)
@@ -686,8 +696,8 @@ Promise<std::tuple<Args...>> all(const Promise<Args>&... arg) {
 }
 template <typename ResultType, typename Tuple, size_t TOTAL, size_t N>
 struct _promise_any {
-  static void apply(const Tuple& t, std::shared_ptr<size_t> fail_count,
-                    Promise<void> pm) {
+  static void apply(const Tuple& t, const std::shared_ptr<size_t>& fail_count,
+                    const Promise<void>& pm) {
     _promise_any<ResultType, Tuple, TOTAL, N - 1>::apply(t, fail_count, pm);
     std::get<N>(t).template then<void>(
         [pm](const typename std::tuple_element<N, ResultType>::type&) -> void {
@@ -703,8 +713,8 @@ struct _promise_any {
 };
 template <typename ResultType, typename Tuple, size_t TOTAL>
 struct _promise_any<ResultType, Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, std::shared_ptr<size_t> fail_count,
-                    Promise<void> pm) {
+  static void apply(const Tuple& t, const std::shared_ptr<size_t>& fail_count,
+                    const Promise<void>& pm) {
     std::get<0>(t).template then<void>(
         [pm](const typename std::tuple_element<0, ResultType>::type&) -> void {
           pm.resolve();
@@ -738,14 +748,14 @@ Promise<void> any(const Promise<Args>&... arg) {
 }
 template <typename Tuple, size_t TOTAL, size_t N>
 struct _promise_race {
-  static void apply(const Tuple& t, Promise<void> pm) {
+  static void apply(const Tuple& t, const Promise<void>& pm) {
     _promise_race<Tuple, TOTAL, N - 1>::apply(t, pm);
     std::get<N>(t).template finally<void>([pm]() -> void { pm.resolve(); });
   }
 };
 template <typename Tuple, size_t TOTAL>
 struct _promise_race<Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, Promise<void> pm) {
+  static void apply(const Tuple& t, const Promise<void>& pm) {
     std::get<0>(t).template finally<void>([pm]() -> void { pm.resolve(); });
   }
 };
@@ -768,8 +778,8 @@ Promise<void> race(const Promise<Args>&... arg) {
 }
 template <typename Tuple, size_t TOTAL, size_t N>
 struct _promise_allSettled {
-  static void apply(const Tuple& t, std::shared_ptr<size_t> done_count,
-                    Promise<void> pm) {
+  static void apply(const Tuple& t, const std::shared_ptr<size_t>& done_count,
+                    const Promise<void>& pm) {
     _promise_allSettled<Tuple, TOTAL, N - 1>::apply(t, done_count, pm);
     std::get<N>(t).template finally<void>([done_count, pm]() -> void {
       if ((++(*done_count)) == TOTAL) {
@@ -780,8 +790,8 @@ struct _promise_allSettled {
 };
 template <typename Tuple, size_t TOTAL>
 struct _promise_allSettled<Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, std::shared_ptr<size_t> done_count,
-                    Promise<void> pm) {
+  static void apply(const Tuple& t, const std::shared_ptr<size_t>& done_count,
+                    const Promise<void>& pm) {
     std::get<0>(t).template finally<void>([done_count, pm]() -> void {
       if ((++(*done_count)) == TOTAL) {
         pm.resolve();
