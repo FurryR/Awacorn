@@ -177,12 +177,13 @@ struct UnaryResult<void, YieldType> {
   YieldType _val;
   ValueType _type;
 };
+constexpr size_t STACK_SIZE = 1024 * 128; // 默认 128K 栈大小
 /**
  * @brief 生成器上下文基类。
  */
 typedef struct _BaseContext {
   _BaseContext(void (*fn)(void), void* arg)
-      : _stack(std::vector<char>(1024 * 128)) {
+      : _stack(std::vector<char>(STACK_SIZE)) {
     getcontext(&_ctx);
     _ctx.uc_stack.ss_sp = _stack.data();
     _ctx.uc_stack.ss_size = _stack.size();
