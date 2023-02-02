@@ -137,35 +137,6 @@ class Promise {
   template <typename Ret,
             typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
   Promise<typename std::decay<Ret>::type> then(
-      const std::function<typename std::decay<Ret>::type()>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->then([t, fn](const T&) -> void {
-      try {
-        t.resolve(fn());
-      } catch (const std::exception& err) {
-        t.reject(err);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> then(const std::function<Ret()>& fn) const {
-    Promise<Ret> t;
-    pm->then([t, fn](const T&) -> void {
-      try {
-        fn();
-      } catch (const std::exception& err) {
-        t.reject(err);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> then(
       const std::function<Promise<typename std::decay<Ret>::type>(const T&)>&
           fn) const {
     using Decay = typename std::decay<Ret>::type;
@@ -184,33 +155,6 @@ class Promise {
     Promise<Ret> t;
     pm->then([t, fn](const T& val) -> void {
       Promise<Ret> tmp = fn(val);
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> then(
-      const std::function<Promise<typename std::decay<Ret>::type>()>& fn)
-      const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->then([t, fn](const T&) -> void {
-      Promise<Decay> tmp = fn();
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> then(const std::function<Promise<Ret>()>& fn) const {
-    Promise<Ret> t;
-    pm->then([t, fn](const T& val) -> void {
-      Promise<Ret> tmp = fn();
       tmp.template then<void>([t]() -> void { t.resolve(); });
       tmp.template error<void>(
           [t](const std::exception& err) -> void { t.reject(err); });
@@ -260,35 +204,6 @@ class Promise {
   template <typename Ret,
             typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
   Promise<typename std::decay<Ret>::type> error(
-      const std::function<typename std::decay<Ret>::type()>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->error([t, fn](const std::exception&) -> void {
-      try {
-        t.resolve(fn());
-      } catch (const std::exception& err2) {
-        t.reject(err2);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> error(const std::function<Ret()>& fn) const {
-    Promise<Ret> t;
-    pm->error([t, fn](const std::exception&) -> void {
-      try {
-        fn();
-      } catch (const std::exception& err2) {
-        t.reject(err2);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> error(
       const std::function<Promise<typename std::decay<Ret>::type>(
           const std::exception&)>& fn) const {
     using Decay = typename std::decay<Ret>::type;
@@ -308,33 +223,6 @@ class Promise {
     Promise<Ret> t;
     pm->error([t, fn](const std::exception& err) -> void {
       Promise<Ret> tmp = fn(err);
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> error(
-      const std::function<Promise<typename std::decay<Ret>::type>()>& fn)
-      const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->error([t, fn](const std::exception&) -> void {
-      Promise<Decay> tmp = fn();
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> error(const std::function<Promise<Ret>()>& fn) const {
-    Promise<Ret> t;
-    pm->error([t, fn](const std::exception&) -> void {
-      Promise<Ret> tmp = fn();
       tmp.template then<void>([t]() -> void { t.resolve(); });
       tmp.template error<void>(
           [t](const std::exception& err) -> void { t.reject(err); });

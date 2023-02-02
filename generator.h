@@ -460,17 +460,14 @@ struct AsyncGenerator {
      * @brief 等待一个无返回值 Promise 完成。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
      *
-     * @tparam T Promise 内部元素的类型，固定为 void。
      * @param value Promise 本身。
      */
-    template <typename T>
-    T await(const Promise::Promise<T>& value) {
+    void await(const Promise::Promise<void>& value) {
       if (_status != Active) throw std::bad_function_call();
       _status = Awaiting;
       _pm_result = Promise::Promise<__Any>(
           value.template then<__Any>([]() { return __Any(); }));
       _switch_ctx();
-      return T();
     }
     Context(void (*fn)(void), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
@@ -602,17 +599,14 @@ struct AsyncGenerator<void, YieldType> {
      * @brief 等待一个无返回值 Promise 完成。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
      *
-     * @tparam T Promise 内部元素的类型，固定为 void。
      * @param value Promise 本身。
      */
-    template <typename T>
-    T await(const Promise::Promise<T>& value) {
+    void await(const Promise::Promise<void>& value) {
       if (_status != Active) throw std::bad_function_call();
       _status = Awaiting;
       _pm_result = Promise::Promise<__Any>(
           value.template then<__Any>([]() { return __Any(); }));
       _switch_ctx();
-      return T();
     }
     Context(void (*fn)(void), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
@@ -727,17 +721,14 @@ struct AsyncGenerator<RetType, void> {
      * @brief 等待一个无返回值 Promise 完成。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
      *
-     * @tparam T Promise 内部元素的类型，固定为 void。
      * @param value Promise 本身。
      */
-    template <typename T>
-    T await(const Promise::Promise<T>& value) {
+    void await(const Promise::Promise<void>& value) {
       if (_status != Active) throw std::bad_function_call();
       _status = Awaiting;
       _pm_result = Promise::Promise<__Any>(
           value.template then<__Any>([]() { return __Any(); }));
       _switch_ctx();
-      return T();
     }
     Context(void (*fn)(void), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
@@ -848,17 +839,14 @@ struct AsyncGenerator<void, void> {
      * @brief 等待一个无返回值 Promise 完成。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
      *
-     * @tparam T Promise 内部元素的类型，固定为 void。
      * @param value Promise 本身。
      */
-    template <typename T>
-    T await(const Promise::Promise<T>& value) {
+    void await(const Promise::Promise<void>& value) {
       if (_status != Active) throw std::bad_function_call();
       _status = Awaiting;
       _pm_result = Promise::Promise<__Any>(
           value.template then<__Any>([]() { return __Any(); }));
       _switch_ctx();
-      return T();
     }
     Context(void (*fn)(void), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
