@@ -75,9 +75,9 @@ class Promise {
     }
     ~_Promise() {
       if (_status == Resolved) {
-        (T*)_val->~T();
+        ((T*)_val)->~T();
       } else if (_status == Rejected) {
-        (std::exception*)_val->~exception();
+        ((std::exception*)_val)->~exception();
       }
     }
 

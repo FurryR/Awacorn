@@ -115,9 +115,9 @@ struct UnaryResult {
   }
   ~UnaryResult() {
     if (_type == Return) {
-      (RetType*)_val->~RetType();
+      ((RetType*)_val)->~RetType();
     } else if (_type == Yield) {
-      (YieldType*)_val->~YieldType();
+      ((YieldType*)_val)->~YieldType();
     }
   }
 
@@ -301,7 +301,7 @@ struct Generator {
    *
    * @return UnaryResult<RetType, YieldType> 结果。
    */
-  UnaryResult<RetType, YieldType> next() { return _next(_ctx); }
+  UnaryResult<RetType, YieldType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
@@ -391,7 +391,7 @@ struct Generator<void, YieldType> {
    *
    * @return UnaryResult<void, YieldType> 结果。
    */
-  UnaryResult<void, YieldType> next() { return _next(_ctx); }
+  UnaryResult<void, YieldType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
@@ -531,7 +531,7 @@ struct AsyncGenerator {
    *
    * @return Promise::Promise<UnaryResult<RetType, YieldType>> 结果。
    */
-  Promise::Promise<UnaryResult<RetType, YieldType>> next() {
+  Promise::Promise<UnaryResult<RetType, YieldType>> next() const {
     return _next(_ctx);
   }
   /**
@@ -670,7 +670,7 @@ struct AsyncGenerator<void, YieldType> {
    *
    * @return Promise::Promise<UnaryResult<void, YieldType>> 结果。
    */
-  Promise::Promise<UnaryResult<void, YieldType>> next() { return _next(_ctx); }
+  Promise::Promise<UnaryResult<void, YieldType>> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
@@ -792,7 +792,7 @@ struct AsyncGenerator<RetType, void> {
    *
    * @return Promise::Promise<RetType> 结果。
    */
-  Promise::Promise<RetType> next() { return _next(_ctx); }
+  Promise::Promise<RetType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
@@ -910,7 +910,7 @@ struct AsyncGenerator<void, void> {
    *
    * @return Promise::Promise<void> 结果。
    */
-  Promise::Promise<void> next() { return _next(_ctx); }
+  Promise::Promise<void> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
