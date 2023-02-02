@@ -72,7 +72,7 @@ struct UnaryResult {
    */
   const RetType& ret() const {
     if (_type != Return) throw std::bad_cast();
-    return *reinterpret_cast<const RetType*>(_val);
+    return *(const RetType*)_val;
   }
   /**
    * @brief 获得中断值。类型不正确则抛出 std::bad_cast 错误。
@@ -81,7 +81,7 @@ struct UnaryResult {
    */
   const YieldType& yield() const {
     if (_type != Yield) throw std::bad_cast();
-    return *reinterpret_cast<const YieldType*>(_val);
+    return *(const YieldType*)_val;
   }
   /**
    * @brief 获得结果类型。
@@ -93,23 +93,21 @@ struct UnaryResult {
       const YieldType& value) {
     UnaryResult<RetType, YieldType> tmp;
     tmp._type = Yield;
-    *reinterpret_cast<YieldType*>(tmp._val) = value;
+    *(YieldType*)tmp._val = value;
     return tmp;
   }
   static UnaryResult<RetType, YieldType> generate_ret(const RetType& value) {
     UnaryResult<RetType, YieldType> tmp;
     tmp._type = Return;
-    *reinterpret_cast<RetType*>(tmp._val) = value;
+    *(RetType*)tmp._val = value;
     return tmp;
   }
   UnaryResult() : _type(Null) {}
   UnaryResult(const UnaryResult<RetType, YieldType>& val) : _type(val._type) {
     if (val._type == Return) {
-      (*reinterpret_cast<RetType*>(_val)) =
-          (*reinterpret_cast<const RetType*>(val._val));
+      *(RetType*)_val = *(const RetType*)val._val;
     } else if (val._type == Yield) {
-      (*reinterpret_cast<YieldType*>(_val)) =
-          (*reinterpret_cast<const YieldType*>(val._val));
+      *(YieldType*)_val = *(const YieldType*)val._val;
     }
   }
   UnaryResult& operator=(const UnaryResult& rhs) {
@@ -117,9 +115,9 @@ struct UnaryResult {
   }
   ~UnaryResult() {
     if (_type == Return) {
-      reinterpret_cast<RetType*>(_val)->~RetType();
+      (RetType*)_val->~RetType();
     } else if (_type == Yield) {
-      reinterpret_cast<YieldType*>(_val)->~YieldType();
+      (YieldType*)_val->~YieldType();
     }
   }
 
@@ -918,9 +916,9 @@ struct AsyncGenerator<void, void> {
    * @param fn 生成器内部的函数。
    */
   explicit AsyncGenerator(const decltype(_type::fn)& fn) {
-    _type* ptr = (decltype(ptr)) new char[sizeof(_type)];
+    char* ptr = new char[sizeof(_type)];
     new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>(ptr);
+    _ctx = std::shared_ptr<_type>((_type*)ptr);
   }
 };
 }  // namespace Generator

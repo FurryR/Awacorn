@@ -30,13 +30,13 @@ class Promise {
     void then(const type& fn) {
       _then = fn;
       if (_status == Resolved) {
-        _then(*reinterpret_cast<T*>(_val));
+        _then(*(T*)_val);
       }
     }
     void error(const error_type& fn) {
       _error = fn;
       if (_status == Rejected) {
-        _error(*reinterpret_cast<std::exception*>(_val));
+        _error(*(std::exception*)_val);
       }
     }
     void finally(const finally_type& fn) {
@@ -48,7 +48,7 @@ class Promise {
     void resolve(const T& val) {
       if (_status == Pending) {
         _status = Resolved;
-        (*reinterpret_cast<T*>(_val)) = val;
+        (*(T*)_val) = val;
         if (_then) _then(val);
         if (_finally) _finally();
       }
@@ -56,7 +56,7 @@ class Promise {
     void reject(const std::exception& err) {
       if (_status == Pending) {
         _status = Rejected;
-        (*reinterpret_cast<std::exception*>(_val)) = err;
+        *(std::exception*)_val = err;
         if (_error) _error(err);
         if (_finally) _finally();
       }
@@ -65,10 +65,9 @@ class Promise {
     _Promise() : _status(Pending) {}
     _Promise(const _Promise& val) : _status(val._status) {
       if (val._status == Resolved) {
-        (*reinterpret_cast<T*>(_val)) = (*reinterpret_cast<const T*>(val._val));
+        *(T*)_val = *(const T*)val._val;
       } else if (val._status == Rejected) {
-        (*reinterpret_cast<std::exception*>(_val)) =
-            (*reinterpret_cast<const std::exception*>(val._val));
+        *(std::exception*)_val = *(const std::exception*)val._val;
       }
     }
     _Promise& operator=(const _Promise& rhs) {
@@ -76,9 +75,9 @@ class Promise {
     }
     ~_Promise() {
       if (_status == Resolved) {
-        reinterpret_cast<T*>(_val)->~T();
+        (T*)_val->~T();
       } else if (_status == Rejected) {
-        reinterpret_cast<std::exception*>(_val)->~exception();
+        (std::exception*)_val->~exception();
       }
     }
 
