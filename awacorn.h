@@ -103,10 +103,10 @@ typedef class EventLoop {
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
                           : std::chrono::high_resolution_clock::duration(0);
-      std::chrono::high_resolution_clock::time_point start =
+      std::chrono::high_resolution_clock::time_point st =
           std::chrono::high_resolution_clock::now();
       min->fn(this, &(*min)), _event.erase(min);
-      duration = std::chrono::high_resolution_clock::now() - start;
+      duration = std::chrono::high_resolution_clock::now() - st;
       for (std::list<Event>::iterator it = _event.begin(); it != _event.end();
            it++)
         it->timeout = it->timeout > duration
@@ -118,7 +118,10 @@ typedef class EventLoop {
   static void _clear(const T* task, std::list<T>* list) noexcept {
     for (typename std::list<T>::const_iterator it = list->cbegin();
          it != list->cend(); it++) {
-      if (&(*it) == task) return void(list->erase(it));
+      if (&(*it) == task) {
+        list->erase(it);
+        return;
+      }
     }
   }
   template <typename T>

@@ -64,24 +64,21 @@ class Promise {
     constexpr Status status() const noexcept { return _status; }
     _Promise() : _status(Pending) {}
     _Promise(const _Promise& val) : _status(val._status) {
-      switch (val._status) {
-        case Resolved:
-          (*reinterpret_cast<T*>(_val)) = (*reinterpret_cast<const T*>(val._val));
-        case Rejected:
-          (*reinterpret_cast<std::exception*>(_val)) =
-              (*reinterpret_cast<const std::exception*>(val._val));
+      if (val._status == Resolved) {
+        (*reinterpret_cast<T*>(_val)) = (*reinterpret_cast<const T*>(val._val));
+      } else if (val._status == Rejected) {
+        (*reinterpret_cast<std::exception*>(_val)) =
+            (*reinterpret_cast<const std::exception*>(val._val));
       }
     }
+    _Promise& operator=(const _Promise& rhs) {
+      return *new (this) _Promise(rhs);
+    }
     ~_Promise() {
-      switch (_status) {
-        case Resolved: {
-          reinterpret_cast<T*>(_val)->~T();
-          break;
-        }
-        case Rejected: {
-          reinterpret_cast<std::exception*>(_val)->~exception();
-          break;
-        }
+      if (_status == Resolved) {
+        reinterpret_cast<T*>(_val)->~T();
+      } else if (_status == Rejected) {
+        reinterpret_cast<std::exception*>(_val)->~exception();
       }
     }
 
