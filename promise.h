@@ -16,6 +16,323 @@ typedef enum Status {
   Resolved = 1,  // 已完成。
   Rejected = 2   // 已失败。
 } Status;
+
+// Promise<T>.then(std::function<Promise<Ret>(ArgType)>) sub-implementation
+// pm.then(std::function<Promise<Ret>(ArgType)>) sub-implementation
+template <typename Ret, typename ArgType, template <typename T> class PromiseT,
+          typename _Promise>
+struct _ThenPromiseImpl {
+  static PromiseT<Ret> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<PromiseT<Ret>(const ArgType&)>& fn) {
+    PromiseT<Ret> t;
+    pm->then([t, fn](const ArgType& val) -> void {
+      PromiseT<Ret> tmp = fn(val);
+      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+// pm.then(std::function<Promise<void>(ArgType)>) sub-implementation
+template <typename ArgType, template <typename T> class PromiseT,
+          typename _Promise>
+struct _ThenPromiseImpl<void, ArgType, PromiseT, _Promise> {
+  static PromiseT<void> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<PromiseT<void>(const ArgType&)>& fn) {
+    PromiseT<void> t;
+    pm->then([t, fn](const ArgType& val) -> void {
+      PromiseT<void> tmp = fn(val);
+      tmp.then([t]() -> void { t.resolve(); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+// Promise<void>.then(std::function<Promise<Ret>()>) sub-implementation
+// pm.then(std::function<Promise<Ret>()>) sub-implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _ThenPromiseImpl<Ret, void, PromiseT, _Promise> {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<PromiseT<Ret>()>& fn) {
+    PromiseT<Ret> t;
+    pm->then([t, fn]() -> void {
+      PromiseT<Ret> tmp = fn();
+      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+// pm.then(std::function<Promise<void>()>) sub-implementation
+template <template <typename T> class PromiseT, typename _Promise>
+struct _ThenPromiseImpl<void, void, PromiseT, _Promise> {
+  static PromiseT<void> apply(const std::shared_ptr<_Promise>& pm,
+                              const std::function<PromiseT<void>()>& fn) {
+    PromiseT<void> t;
+    pm->then([t, fn]() -> void {
+      PromiseT<void> tmp = fn();
+      tmp.then([t]() -> void { t.resolve(); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+
+// Promise<T>.then implementation
+// pm.then(std::function<Ret(ArgType)>) implementation
+template <typename Ret, typename ArgType, template <typename T> class PromiseT,
+          typename _Promise>
+struct _ThenImpl {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<Ret(const ArgType&)>& fn) {
+    PromiseT<Ret> t;
+    pm->then([t, fn](const ArgType& val) -> void {
+      try {
+        t.resolve(fn(val));
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
+    });
+    return t;
+  }
+};
+// pm.then(std::function<Promise<Ret>(ArgType)>) implementation
+template <typename Ret, typename ArgType, template <typename T> class PromiseT,
+          typename _Promise>
+struct _ThenImpl<PromiseT<Ret>, ArgType, PromiseT, _Promise> {
+  static PromiseT<Ret> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<PromiseT<Ret>(const ArgType&)>& fn) {
+    return _ThenPromiseImpl<Ret, ArgType, PromiseT, _Promise>::apply(pm, fn);
+  }
+};
+// pm.then(std::function<void(ArgType)>) implementation
+template <typename ArgType, template <typename T> class PromiseT,
+          typename _Promise>
+struct _ThenImpl<void, ArgType, PromiseT, _Promise> {
+  static PromiseT<void> apply(const std::shared_ptr<_Promise>& pm,
+                              const std::function<void(const ArgType&)>& fn) {
+    PromiseT<void> t;
+    pm->then([t, fn](const ArgType& val) -> void {
+      try {
+        fn(val);
+        t.resolve();
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
+    });
+    return t;
+  }
+};
+
+// Promise<void>.then implementation
+// pm.then(std::function<Ret()>) implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _ThenImpl<Ret, void, PromiseT, _Promise> {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<Ret()>& fn) {
+    PromiseT<Ret> t;
+    pm->then([t, fn]() -> void {
+      try {
+        t.resolve(fn());
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
+    });
+    return t;
+  }
+};
+// pm.then(std::function<Promise<Ret>()>) implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _ThenImpl<PromiseT<Ret>, void, PromiseT, _Promise> {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<PromiseT<Ret>()>& fn) {
+    return _ThenPromiseImpl<Ret, void, PromiseT, _Promise>::apply(pm, fn);
+  }
+};
+// pm.then(std::function<void()>) implementation
+template <template <typename T> class PromiseT, typename _Promise>
+struct _ThenImpl<void, void, PromiseT, _Promise> {
+  static PromiseT<void> apply(const std::shared_ptr<_Promise>& pm,
+                              const std::function<void()>& fn) {
+    PromiseT<void> t;
+    pm->then([t, fn]() -> void {
+      try {
+        fn();
+        t.resolve();
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
+    });
+    return t;
+  }
+};
+
+// Promise<T>.error(std::function<Promise<Ret>(std::exception)>)
+// sub-implementation
+
+// pm.error(std::function<Promise<Ret>(std::exception)>) sub-implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _ErrorPromiseImpl {
+  static PromiseT<Ret> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<PromiseT<Ret>(const std::exception&)>& fn) {
+    PromiseT<Ret> t;
+    pm->error([t, fn](const std::exception& val) -> void {
+      PromiseT<Ret> tmp = fn(val);
+      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+// pm.error(std::function<Promise<void>(std::exception)>) sub-implementation
+template <template <typename T> class PromiseT, typename _Promise>
+struct _ErrorPromiseImpl<void, PromiseT, _Promise> {
+  static PromiseT<void> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<PromiseT<void>(const std::exception&)>& fn) {
+    PromiseT<void> t;
+    pm->error([t, fn](const std::exception& val) -> void {
+      PromiseT<void> tmp = fn(val);
+      tmp.then([t]() -> void { t.resolve(); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+
+// Promise<T>.error implementation
+// pm.error(std::function<Ret(std::exception)>) implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _ErrorImpl {
+  static PromiseT<Ret> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<Ret(const std::exception&)>& fn) {
+    PromiseT<Ret> t;
+    pm->error([t, fn](const std::exception& err) -> void {
+      try {
+        t.resolve(fn(err));
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
+    });
+    return t;
+  }
+};
+// pm.error(std::function<Promise<Ret>(std::exception)>) implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _ErrorImpl<PromiseT<Ret>, PromiseT, _Promise> {
+  static PromiseT<Ret> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<PromiseT<Ret>(const std::exception&)>& fn) {
+    return _ErrorPromiseImpl<Ret, PromiseT, _Promise>::apply(pm, fn);
+  }
+};
+// pm.error(std::function<void(std::exception)>) implementation
+template <template <typename T> class PromiseT, typename _Promise>
+struct _ErrorImpl<void, PromiseT, _Promise> {
+  static PromiseT<void> apply(
+      const std::shared_ptr<_Promise>& pm,
+      const std::function<void(const std::exception&)>& fn) {
+    PromiseT<void> t;
+    pm->error([t, fn](const std::exception& err) -> void {
+      try {
+        fn(err);
+      } catch (const std::exception& err) {
+        t.reject(err);
+        return;
+      }
+      t.resolve();
+    });
+    return t;
+  }
+};
+
+// Promise<T>.finally(std::function<Promise<Ret>()>) sub-implementation
+// pm.finally(std::function<Promise<Ret>()>) sub-implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _FinallyPromiseImpl {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<PromiseT<Ret>()>& fn) {
+    PromiseT<Ret> t;
+    pm->finally([t, fn]() -> void {
+      PromiseT<Ret> tmp = fn();
+      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+// pm.finally(std::function<Promise<void>()>) sub-implementation
+template <template <typename T> class PromiseT, typename _Promise>
+struct _FinallyPromiseImpl<void, PromiseT, _Promise> {
+  static PromiseT<void> apply(const std::shared_ptr<_Promise>& pm,
+                              const std::function<PromiseT<void>()>& fn) {
+    PromiseT<void> t;
+    pm->finally([t, fn]() -> void {
+      PromiseT<void> tmp = fn();
+      tmp.then([t]() -> void { t.resolve(); });
+      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+    });
+    return t;
+  }
+};
+
+// Promise<T>.finally implementation
+// pm.finally(std::function<Ret()>) implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _FinallyImpl {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<Ret()>& fn) {
+    PromiseT<Ret> t;
+    pm->finally([t, fn]() -> void {
+      try {
+        t.resolve(fn());
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
+    });
+    return t;
+  }
+};
+// pm.finally(std::function<Promise<Ret>()>) implementation
+template <typename Ret, template <typename T> class PromiseT, typename _Promise>
+struct _FinallyImpl<PromiseT<Ret>, PromiseT, _Promise> {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<PromiseT<Ret>()>& fn) {
+    return _FinallyPromiseImpl<Ret, PromiseT, _Promise>::apply(pm, fn);
+  }
+};
+// pm.finally(std::function<void()>) implementation
+template <template <typename T> class PromiseT, typename _Promise>
+struct _FinallyImpl<void, PromiseT, _Promise> {
+  static PromiseT<void> apply(const std::shared_ptr<_Promise>& pm,
+                              const std::function<void()>& fn) {
+    PromiseT<void> t;
+    pm->finally([t, fn]() -> void {
+      try {
+        fn();
+      } catch (const std::exception& err) {
+        t.reject(err);
+        return;
+      }
+      t.resolve();
+    });
+    return t;
+  }
+};
+
+template <typename T, template <typename T2> class PromiseT>
+struct remove_promise {
+  typedef T type;
+};
+template <typename T, template <typename T2> class PromiseT>
+struct remove_promise<PromiseT<T>, PromiseT> {
+  typedef T type;
+};
 /**
  * @brief Promise 对象。
  *
@@ -101,133 +418,31 @@ class Promise {
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 Promise 完成以后再 resolve。
    *
-   * @tparam Ret 函数的返回类型。
    * @param fn 要执行的函数。
    * @return Promise<Ret> 对函数的 Promise
    */
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> then(
-      const std::function<typename std::decay<Ret>::type(const T&)>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->then([t, fn](const T& val) -> void {
-      try {
-        t.resolve(fn(val));
-      } catch (const std::exception& err) {
-        t.reject(err);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> then(const std::function<Ret(const T&)>& fn) const {
-    Promise<Ret> t;
-    pm->then([t, fn](const T& val) -> void {
-      try {
-        fn(val);
-      } catch (const std::exception& err) {
-        t.reject(err);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> then(
-      const std::function<Promise<typename std::decay<Ret>::type>(const T&)>&
-          fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->then([t, fn](const T& val) -> void {
-      Promise<Decay> tmp = fn(val);
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> then(const std::function<Promise<Ret>(const T&)>& fn) const {
-    Promise<Ret> t;
-    pm->then([t, fn](const T& val) -> void {
-      Promise<Ret> tmp = fn(val);
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
+  template <typename U>
+  Promise<typename remove_promise<
+      decltype(std::declval<U>()(std::declval<T>())), Promise>::type>
+  then(const U& fn) const {
+    using Ret = decltype(std::declval<U>()(std::declval<T>()));
+    return _ThenImpl<Ret, T, Promise, _Promise>::apply(pm, fn);
   }
   /**
    * @brief 设定在 Promise 发生错误后执行的函数。返回一个对这个函数的
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 Promise 完成以后再 resolve。
    *
-   * @tparam Ret 函数的返回类型。
    * @param fn 要执行的函数。
    * @return Promise<Ret> 对函数的 Promise。
    */
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> error(
-      const std::function<
-          typename std::decay<Ret>::type(const std::exception&)>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      try {
-        t.resolve(fn(err));
-      } catch (const std::exception& err2) {
-        t.reject(err2);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> error(
-      const std::function<Ret(const std::exception&)>& fn) const {
-    Promise<Ret> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      try {
-        fn(err);
-      } catch (const std::exception& err2) {
-        t.reject(err2);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> error(
-      const std::function<Promise<typename std::decay<Ret>::type>(
-          const std::exception&)>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      Promise<Decay> tmp = fn(err);
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> error(
-      const std::function<Promise<Ret>(const std::exception&)>& fn) const {
-    Promise<Ret> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      Promise<Ret> tmp = fn(err);
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
+  template <typename U>
+  Promise<typename remove_promise<
+      decltype(std::declval<U>()(std::declval<std::exception>())),
+      Promise>::type>
+  error(const U& fn) const {
+    using Ret = decltype(std::declval<U>()(std::declval<std::exception>()));
+    return _ErrorImpl<Ret, Promise, _Promise>::apply(pm, fn);
   }
   /**
    * @brief 设定在 Promise
@@ -235,64 +450,14 @@ class Promise {
    * 的返回值。返回一个对这个函数的 Promise，当函数返回时，Promise 被
    * resolve。如果返回一个 Promise，则会等待这个 Promise 完成以后再 resolve。
    *
-   * @tparam Ret 函数的返回类型。
    * @param fn 要执行的函数。
    * @return Promise<Ret> 对函数的 Promise。
    */
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> finally(
-      const std::function<typename std::decay<Ret>::type()>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->finally([t, fn]() -> void {
-      try {
-        t.resolve(fn());
-      } catch (const std::exception& err) {
-        t.reject(err);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> finally(const std::function<Ret()>& fn) const {
-    Promise<Ret> t;
-    pm->finally([t, fn]() -> void {
-      try {
-        fn();
-      } catch (const std::exception& err) {
-        t.reject(err);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> finally(
-      const std::function<Promise<typename std::decay<Ret>::type>()>& fn) {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->finally([t, fn]() -> void {
-      Promise<Decay> tmp = fn();
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> finally(const std::function<Promise<Ret>()>& fn) {
-    Promise<Ret> t;
-    pm->finally([t, fn]() -> void {
-      Promise<Ret> tmp = fn();
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
+  template <typename U>
+  Promise<typename remove_promise<decltype(std::declval<U>()()), Promise>::type>
+  finally(const U& fn) const {
+    using Ret = decltype(std::declval<U>()());
+    return _FinallyImpl<Ret, Promise, _Promise>::apply(pm, fn);
   }
   /**
    * @brief 完成此Promise。
@@ -376,133 +541,30 @@ class Promise<void> {
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 Promise 完成以后再 resolve。
    *
-   * @tparam Ret 函数的返回类型。
    * @param fn 要执行的函数。
    * @return Promise<Ret> 对函数的 Promise
    */
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> then(
-      const std::function<typename std::decay<Ret>::type()>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->then([t, fn]() -> void {
-      try {
-        t.resolve(fn());
-      } catch (const std::exception& err) {
-        t.reject(err);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> then(const std::function<Ret()>& fn) const {
-    Promise<Ret> t;
-    pm->then([t, fn]() -> void {
-      try {
-        fn();
-      } catch (const std::exception& err) {
-        t.reject(err);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> then(
-      const std::function<Promise<typename std::decay<Ret>::type>()>& fn)
-      const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->then([t, fn]() -> void {
-      Promise<Decay> tmp = fn();
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> then(const std::function<Promise<Ret>()>& fn) const {
-    Promise<Ret> t;
-    pm->then([t, fn]() -> void {
-      Promise<Ret> tmp = fn();
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
+  template <typename U>
+  Promise<typename remove_promise<decltype(std::declval<U>()()), Promise>::type>
+  then(const U& fn) const {
+    using Ret = decltype(std::declval<U>()());
+    return _ThenImpl<Ret, void, Promise, _Promise>::apply(pm, fn);
   }
   /**
    * @brief 设定在 Promise 发生错误后执行的函数。返回一个对这个函数的
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 Promise 完成以后再 resolve。
    *
-   * @tparam Ret 函数的返回类型。
    * @param fn 要执行的函数。
    * @return Promise<Ret> 对函数的 Promise。
    */
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> error(
-      const std::function<
-          typename std::decay<Ret>::type(const std::exception&)>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      try {
-        t.resolve(fn(err));
-      } catch (const std::exception& err2) {
-        t.reject(err2);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> error(
-      const std::function<Ret(const std::exception&)>& fn) const {
-    Promise<Ret> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      try {
-        fn(err);
-      } catch (const std::exception& err2) {
-        t.reject(err2);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> error(
-      const std::function<Promise<typename std::decay<Ret>::type>(
-          const std::exception&)>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      Promise<Decay> tmp = fn(err);
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> error(
-      const std::function<Promise<Ret>(const std::exception&)>& fn) const {
-    Promise<Ret> t;
-    pm->error([t, fn](const std::exception& err) -> void {
-      Promise<Ret> tmp = fn(err);
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
+  template <typename U>
+  Promise<typename remove_promise<
+      decltype(std::declval<U>()(std::declval<std::exception>())),
+      Promise>::type>
+  error(const U& fn) const {
+    using Ret = decltype(std::declval<U>()(std::declval<std::exception>()));
+    return _ErrorImpl<Ret, Promise, _Promise>::apply(pm, fn);
   }
   /**
    * @brief 设定在 Promise
@@ -510,64 +572,14 @@ class Promise<void> {
    * 的返回值。返回一个对这个函数的 Promise，当函数返回时，Promise 被
    * resolve。如果返回一个 Promise，则会等待这个 Promise 完成以后再 resolve。
    *
-   * @tparam Ret 函数的返回类型。
    * @param fn 要执行的函数。
    * @return Promise<Ret> 对函数的 Promise。
    */
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> finally(
-      const std::function<typename std::decay<Ret>::type()>& fn) const {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->finally([t, fn]() -> void {
-      try {
-        t.resolve(fn());
-      } catch (const std::exception& err) {
-        t.reject(err);
-      }
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> finally(const std::function<Ret()>& fn) const {
-    Promise<Ret> t;
-    pm->finally([t, fn]() -> void {
-      try {
-        fn();
-      } catch (const std::exception& err) {
-        t.reject(err);
-        return;
-      }
-      t.resolve();
-    });
-    return t;
-  }
-  template <typename Ret,
-            typename = typename std::enable_if<!std::is_void<Ret>::value>::type>
-  Promise<typename std::decay<Ret>::type> finally(
-      const std::function<Promise<typename std::decay<Ret>::type>()>& fn) {
-    using Decay = typename std::decay<Ret>::type;
-    Promise<Decay> t;
-    pm->finally([t, fn]() -> void {
-      Promise<Decay> tmp = fn();
-      tmp.template then<void>(
-          [t](const Decay& val) -> void { t.resolve(val); });
-      tmp.template then<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
-  }
-  template <typename Ret>
-  Promise<Ret> finally(const std::function<Promise<Ret>()>& fn) {
-    Promise<Ret> t;
-    pm->finally([t, fn]() -> void {
-      Promise<Ret> tmp = fn();
-      tmp.template then<void>([t]() -> void { t.resolve(); });
-      tmp.template error<void>(
-          [t](const std::exception& err) -> void { t.reject(err); });
-    });
-    return t;
+  template <typename U>
+  Promise<typename remove_promise<decltype(std::declval<U>()()), Promise>::type>
+  finally(const U& fn) const {
+    using Ret = decltype(std::declval<U>()());
+    return _FinallyImpl<Ret, Promise, _Promise>::apply(pm, fn);
   }
   /**
    * @brief 完成此Promise。
@@ -602,10 +614,8 @@ Promise<Value> resolve(const Value& val) {
   tmp.resolve(val);
   return tmp;
 }
-template <typename Value,
-          typename = typename std::enable_if<std::is_void<Value>::value>::type>
-Promise<Value> resolve() {
-  Promise<Value> tmp;
+Promise<void> resolve() {
+  Promise<void> tmp;
   tmp.resolve();
   return tmp;
 }
@@ -639,7 +649,7 @@ struct _promise_all {
                     const Promise<ResultType>& pm) {
     _promise_all<ResultType, Tuple, TOTAL, N - 1>::apply(t, result, done_count,
                                                          pm);
-    std::get<N>(t).template then<void>(
+    std::get<N>(t).then(
         [result, done_count,
          pm](const typename std::tuple_element<N, ResultType>::type& value)
             -> void {
@@ -648,7 +658,7 @@ struct _promise_all {
             pm.resolve(*result);
           }
         });
-    std::get<N>(t).template error<void>(
+    std::get<N>(t).error(
         [pm](const std::exception&) -> void { pm.reject(std::exception()); });
   }
 };
@@ -657,7 +667,7 @@ struct _promise_all<ResultType, Tuple, TOTAL, 0> {
   static void apply(const Tuple& t, const std::shared_ptr<ResultType>& result,
                     const std::shared_ptr<size_t>& done_count,
                     const Promise<ResultType>& pm) {
-    std::get<0>(t).template then<void>(
+    std::get<0>(t).then(
         [result, done_count,
          pm](const typename std::tuple_element<0, ResultType>::type& value)
             -> void {
@@ -666,7 +676,7 @@ struct _promise_all<ResultType, Tuple, TOTAL, 0> {
             pm.resolve(*result);
           }
         });
-    std::get<0>(t).template error<void>(
+    std::get<0>(t).error(
         [pm](const std::exception&) -> void { pm.reject(std::exception()); });
   }
 };
@@ -695,32 +705,30 @@ struct _promise_any {
   static void apply(const Tuple& t, const std::shared_ptr<size_t>& fail_count,
                     const Promise<void>& pm) {
     _promise_any<ResultType, Tuple, TOTAL, N - 1>::apply(t, fail_count, pm);
-    std::get<N>(t).template then<void>(
+    std::get<N>(t).then(
         [pm](const typename std::tuple_element<N, ResultType>::type&) -> void {
           pm.resolve();
         });
-    std::get<N>(t).template error<void>(
-        [pm, fail_count](const std::exception&) -> void {
-          if ((++(*fail_count)) == TOTAL) {
-            pm.reject(std::exception());
-          }
-        });
+    std::get<N>(t).error([pm, fail_count](const std::exception&) -> void {
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(std::exception());
+      }
+    });
   }
 };
 template <typename ResultType, typename Tuple, size_t TOTAL>
 struct _promise_any<ResultType, Tuple, TOTAL, 0> {
   static void apply(const Tuple& t, const std::shared_ptr<size_t>& fail_count,
                     const Promise<void>& pm) {
-    std::get<0>(t).template then<void>(
+    std::get<0>(t).then(
         [pm](const typename std::tuple_element<0, ResultType>::type&) -> void {
           pm.resolve();
         });
-    std::get<0>(t).template error<void>(
-        [pm, fail_count](const std::exception&) -> void {
-          if ((++(*fail_count)) == TOTAL) {
-            pm.reject(std::exception());
-          }
-        });
+    std::get<0>(t).error([pm, fail_count](const std::exception&) -> void {
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(std::exception());
+      }
+    });
   }
 };
 /**
@@ -746,13 +754,13 @@ template <typename Tuple, size_t TOTAL, size_t N>
 struct _promise_race {
   static void apply(const Tuple& t, const Promise<void>& pm) {
     _promise_race<Tuple, TOTAL, N - 1>::apply(t, pm);
-    std::get<N>(t).template finally<void>([pm]() -> void { pm.resolve(); });
+    std::get<N>(t).finally([pm]() -> void { pm.resolve(); });
   }
 };
 template <typename Tuple, size_t TOTAL>
 struct _promise_race<Tuple, TOTAL, 0> {
   static void apply(const Tuple& t, const Promise<void>& pm) {
-    std::get<0>(t).template finally<void>([pm]() -> void { pm.resolve(); });
+    std::get<0>(t).finally([pm]() -> void { pm.resolve(); });
   }
 };
 /**
@@ -777,7 +785,7 @@ struct _promise_allSettled {
   static void apply(const Tuple& t, const std::shared_ptr<size_t>& done_count,
                     const Promise<void>& pm) {
     _promise_allSettled<Tuple, TOTAL, N - 1>::apply(t, done_count, pm);
-    std::get<N>(t).template finally<void>([done_count, pm]() -> void {
+    std::get<N>(t).finally([done_count, pm]() -> void {
       if ((++(*done_count)) == TOTAL) {
         pm.resolve();
       }
@@ -788,7 +796,7 @@ template <typename Tuple, size_t TOTAL>
 struct _promise_allSettled<Tuple, TOTAL, 0> {
   static void apply(const Tuple& t, const std::shared_ptr<size_t>& done_count,
                     const Promise<void>& pm) {
-    std::get<0>(t).template finally<void>([done_count, pm]() -> void {
+    std::get<0>(t).finally([done_count, pm]() -> void {
       if ((++(*done_count)) == TOTAL) {
         pm.resolve();
       }
