@@ -27,9 +27,13 @@ struct _ThenPromiseImpl {
       const std::function<PromiseT<Ret>(const ArgType&)>& fn) {
     PromiseT<Ret> t;
     pm->then([t, fn](const ArgType& val) -> void {
-      PromiseT<Ret> tmp = fn(val);
-      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<Ret> tmp = fn(val);
+        tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -43,9 +47,13 @@ struct _ThenPromiseImpl<void, ArgType, PromiseT, _Promise> {
       const std::function<PromiseT<void>(const ArgType&)>& fn) {
     PromiseT<void> t;
     pm->then([t, fn](const ArgType& val) -> void {
-      PromiseT<void> tmp = fn(val);
-      tmp.then([t]() -> void { t.resolve(); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<void> tmp = fn(val);
+        tmp.then([t]() -> void { t.resolve(); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -58,9 +66,13 @@ struct _ThenPromiseImpl<Ret, void, PromiseT, _Promise> {
                              const std::function<PromiseT<Ret>()>& fn) {
     PromiseT<Ret> t;
     pm->then([t, fn]() -> void {
-      PromiseT<Ret> tmp = fn();
-      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<Ret> tmp = fn();
+        tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -72,9 +84,13 @@ struct _ThenPromiseImpl<void, void, PromiseT, _Promise> {
                               const std::function<PromiseT<void>()>& fn) {
     PromiseT<void> t;
     pm->then([t, fn]() -> void {
-      PromiseT<void> tmp = fn();
-      tmp.then([t]() -> void { t.resolve(); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<void> tmp = fn();
+        tmp.then([t]() -> void { t.resolve(); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -181,9 +197,13 @@ struct _ErrorPromiseImpl {
       const std::function<PromiseT<Ret>(const std::exception&)>& fn) {
     PromiseT<Ret> t;
     pm->error([t, fn](const std::exception& val) -> void {
-      PromiseT<Ret> tmp = fn(val);
-      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<Ret> tmp = fn(val);
+        tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -196,9 +216,13 @@ struct _ErrorPromiseImpl<void, PromiseT, _Promise> {
       const std::function<PromiseT<void>(const std::exception&)>& fn) {
     PromiseT<void> t;
     pm->error([t, fn](const std::exception& val) -> void {
-      PromiseT<void> tmp = fn(val);
-      tmp.then([t]() -> void { t.resolve(); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<void> tmp = fn(val);
+        tmp.then([t]() -> void { t.resolve(); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -259,9 +283,13 @@ struct _FinallyPromiseImpl {
                              const std::function<PromiseT<Ret>()>& fn) {
     PromiseT<Ret> t;
     pm->finally([t, fn]() -> void {
-      PromiseT<Ret> tmp = fn();
-      tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<Ret> tmp = fn();
+        tmp.then([t](const Ret& val) -> void { t.resolve(val); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }
@@ -273,9 +301,13 @@ struct _FinallyPromiseImpl<void, PromiseT, _Promise> {
                               const std::function<PromiseT<void>()>& fn) {
     PromiseT<void> t;
     pm->finally([t, fn]() -> void {
-      PromiseT<void> tmp = fn();
-      tmp.then([t]() -> void { t.resolve(); });
-      tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      try {
+        PromiseT<void> tmp = fn();
+        tmp.then([t]() -> void { t.resolve(); });
+        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
+      } catch (const std::exception& err) {
+        t.reject(err);
+      }
     });
     return t;
   }

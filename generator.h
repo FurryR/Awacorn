@@ -56,7 +56,7 @@ const T& __Any_cast(const __Any& val) {
  * @tparam YieldType 中断的类型
  */
 template <typename RetType, typename YieldType>
-struct UnaryResult {
+struct Result {
   /**
    * @brief 结果的类型。
    */
@@ -89,31 +89,31 @@ struct UnaryResult {
    * @return ValueType 结果类型。
    */
   ValueType type() const noexcept { return _type; }
-  static UnaryResult<RetType, YieldType> generate_yield(
+  static Result<RetType, YieldType> generate_yield(
       const YieldType& value) {
-    UnaryResult<RetType, YieldType> tmp;
+    Result<RetType, YieldType> tmp;
     tmp._type = Yield;
     *(YieldType*)tmp._val = value;
     return tmp;
   }
-  static UnaryResult<RetType, YieldType> generate_ret(const RetType& value) {
-    UnaryResult<RetType, YieldType> tmp;
+  static Result<RetType, YieldType> generate_ret(const RetType& value) {
+    Result<RetType, YieldType> tmp;
     tmp._type = Return;
     *(RetType*)tmp._val = value;
     return tmp;
   }
-  UnaryResult() : _type(Null) {}
-  UnaryResult(const UnaryResult<RetType, YieldType>& val) : _type(val._type) {
+  Result() : _type(Null) {}
+  Result(const Result<RetType, YieldType>& val) : _type(val._type) {
     if (val._type == Return) {
       *(RetType*)_val = *(const RetType*)val._val;
     } else if (val._type == Yield) {
       *(YieldType*)_val = *(const YieldType*)val._val;
     }
   }
-  UnaryResult& operator=(const UnaryResult& rhs) {
-    return *new (this) UnaryResult(rhs);
+  Result& operator=(const Result& rhs) {
+    return *new (this) Result(rhs);
   }
-  ~UnaryResult() {
+  ~Result() {
     if (_type == Return) {
       ((RetType*)_val)->~RetType();
     } else if (_type == Yield) {
@@ -136,7 +136,7 @@ struct UnaryResult {
  * @tparam YieldType 中断类型。
  */
 template <typename YieldType>
-struct UnaryResult<void, YieldType> {
+struct Result<void, YieldType> {
   /**
    * @brief 结果的类型。
    */
@@ -160,18 +160,18 @@ struct UnaryResult<void, YieldType> {
    * @return ValueType 结果类型。
    */
   ValueType type() const noexcept { return _type; }
-  static UnaryResult<void, YieldType> generate_yield(const YieldType& value) {
-    UnaryResult<void, YieldType> tmp;
+  static Result<void, YieldType> generate_yield(const YieldType& value) {
+    Result<void, YieldType> tmp;
     tmp._type = Yield;
     tmp._val = value;
     return tmp;
   }
-  static UnaryResult<void, YieldType> generate_ret() {
-    UnaryResult<void, YieldType> tmp;
+  static Result<void, YieldType> generate_ret() {
+    Result<void, YieldType> tmp;
     tmp._type = Return;
     return tmp;
   }
-  UnaryResult() : _type(Null) {}
+  Result() : _type(Null) {}
 
  private:
   YieldType _val;
@@ -225,11 +225,11 @@ struct _BaseGenerator {
 template <typename RetType, typename YieldType, typename Gen>
 struct _YieldImpl {
   static void apply(void (_BaseContext::*fn)(), _BaseContext* ctx,
-                    UnaryResult<RetType, YieldType>* result,
+                    Result<RetType, YieldType>* result,
                     typename Gen::Status* status, const YieldType& value) {
     if (*status != Gen::Active) throw std::bad_function_call();
     *status = Gen::Yielded;
-    *result = UnaryResult<RetType, YieldType>::generate_yield(value);
+    *result = Result<RetType, YieldType>::generate_yield(value);
     (ctx->*fn)();
   }
 };
@@ -298,12 +298,12 @@ struct Generator {
 
    private:
     Status _status;
-    UnaryResult<RetType, YieldType> _result;
+    Result<RetType, YieldType> _result;
   } Context;
 
  private:
   typedef _BaseGenerator<RetType(Context*), Context> _type;
-  static UnaryResult<RetType, YieldType> _next(
+  static Result<RetType, YieldType> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
@@ -316,7 +316,7 @@ struct Generator {
   }
   static void run_fn(_type* self) {
     self->ctx._result =
-        UnaryResult<RetType, YieldType>::generate_ret(self->fn(&self->ctx));
+        Result<RetType, YieldType>::generate_ret(self->fn(&self->ctx));
     self->ctx._status = Returned;
     setcontext(&self->ctx._ctx);
   }
@@ -334,9 +334,9 @@ struct Generator {
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return UnaryResult<RetType, YieldType> 结果。
+   * @return Result<RetType, YieldType> 结果。
    */
-  UnaryResult<RetType, YieldType> next() const { return _next(_ctx); }
+  Result<RetType, YieldType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
@@ -387,12 +387,12 @@ struct Generator<void, YieldType> {
 
    private:
     Status _status;
-    UnaryResult<void, YieldType> _result;
+    Result<void, YieldType> _result;
   } Context;
 
  private:
   typedef _BaseGenerator<void(Context*), Context> _type;
-  static UnaryResult<void, YieldType> _next(
+  static Result<void, YieldType> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
@@ -422,9 +422,9 @@ struct Generator<void, YieldType> {
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return UnaryResult<void, YieldType> 结果。
+   * @return Result<void, YieldType> 结果。
    */
-  UnaryResult<void, YieldType> next() const { return _next(_ctx); }
+  Result<void, YieldType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
@@ -493,12 +493,12 @@ struct AsyncGenerator {
    private:
     Status _status;
     __Any _pm_result;
-    UnaryResult<RetType, YieldType> _result;
+    Result<RetType, YieldType> _result;
   } Context;
 
  private:
   typedef _BaseGenerator<RetType(Context*), Context> _type;
-  static Promise::Promise<UnaryResult<RetType, YieldType>> _next(
+  static Promise::Promise<Result<RetType, YieldType>> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending ||
         _ctx->ctx._status == Awaiting) {
@@ -520,7 +520,7 @@ struct AsyncGenerator {
   }
   static void run_fn(_type* self) {
     self->ctx._result =
-        UnaryResult<RetType, YieldType>::generate_ret(self->fn(&self->ctx));
+        Result<RetType, YieldType>::generate_ret(self->fn(&self->ctx));
     self->ctx._status = Returned;
     setcontext(&self->ctx._ctx);
   }
@@ -538,9 +538,9 @@ struct AsyncGenerator {
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return Promise::Promise<UnaryResult<RetType, YieldType>> 结果。
+   * @return Promise::Promise<Result<RetType, YieldType>> 结果。
    */
-  Promise::Promise<UnaryResult<RetType, YieldType>> next() const {
+  Promise::Promise<Result<RetType, YieldType>> next() const {
     return _next(_ctx);
   }
   /**
@@ -610,12 +610,12 @@ struct AsyncGenerator<void, YieldType> {
    private:
     Status _status;
     __Any _pm_result;
-    UnaryResult<void, YieldType> _result;
+    Result<void, YieldType> _result;
   } Context;
 
  private:
   typedef _BaseGenerator<void(Context*), Context> _type;
-  static Promise::Promise<UnaryResult<void, YieldType>> _next(
+  static Promise::Promise<Result<void, YieldType>> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending ||
         _ctx->ctx._status == Awaiting) {
@@ -654,9 +654,9 @@ struct AsyncGenerator<void, YieldType> {
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return Promise::Promise<UnaryResult<void, YieldType>> 结果。
+   * @return Promise::Promise<Result<void, YieldType>> 结果。
    */
-  Promise::Promise<UnaryResult<void, YieldType>> next() const {
+  Promise::Promise<Result<void, YieldType>> next() const {
     return _next(_ctx);
   }
   /**
