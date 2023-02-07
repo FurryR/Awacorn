@@ -9,6 +9,45 @@
 #include <tuple>
 namespace Promise {
 /**
+ * @brief 类型安全的最小 any 实现，用于异常。
+ */
+typedef class Unknown {
+  typedef struct Base {
+    virtual ~Base() = default;
+    virtual const std::type_info& type() const = 0;
+    virtual std::unique_ptr<Base> clone() const = 0;
+  } Base;
+  template <typename T>
+  struct Derived : Base {
+    T data;
+    virtual std::unique_ptr<Base> clone() const override {
+      return std::unique_ptr<Base>(new Derived<T>(data));
+    }
+    virtual const std::type_info& type() const override {
+      return typeid(T);
+    }
+    Derived(const T& data) : data(data) {}
+  };
+  std::unique_ptr<Base> ptr;
+
+ public:
+  Unknown() = default;
+  template <typename T>
+  Unknown(const T& val) : ptr(std::unique_ptr<Base>(new Derived<T>(val))) {}
+  Unknown(const Unknown& val) : ptr(val.ptr ? val.ptr->clone() : nullptr) {}
+  Unknown& operator=(const Unknown& rhs) { return *new (this) Unknown(rhs); }
+  const std::type_info& type() const {
+    return ptr->type();
+  }
+  template <typename T>
+  const T& cast() const {
+    Unknown::Derived<T>* _ptr = dynamic_cast<Unknown::Derived<T>*>(ptr.get());
+    if (_ptr) return _ptr->data;
+    throw std::bad_cast();
+  }
+} Unknown;
+
+/**
  * @brief Promise的状态。
  */
 typedef enum Status {
@@ -30,8 +69,8 @@ struct _ThenPromiseImpl {
       try {
         PromiseT<Ret> tmp = fn(val);
         tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -50,8 +89,8 @@ struct _ThenPromiseImpl<void, ArgType, PromiseT, _Promise> {
       try {
         PromiseT<void> tmp = fn(val);
         tmp.then([t]() -> void { t.resolve(); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -69,8 +108,8 @@ struct _ThenPromiseImpl<Ret, void, PromiseT, _Promise> {
       try {
         PromiseT<Ret> tmp = fn();
         tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -87,8 +126,8 @@ struct _ThenPromiseImpl<void, void, PromiseT, _Promise> {
       try {
         PromiseT<void> tmp = fn();
         tmp.then([t]() -> void { t.resolve(); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -107,7 +146,7 @@ struct _ThenImpl {
     pm->then([t, fn](const ArgType& val) -> void {
       try {
         t.resolve(fn(val));
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -135,7 +174,7 @@ struct _ThenImpl<void, ArgType, PromiseT, _Promise> {
       try {
         fn(val);
         t.resolve();
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -153,7 +192,7 @@ struct _ThenImpl<Ret, void, PromiseT, _Promise> {
     pm->then([t, fn]() -> void {
       try {
         t.resolve(fn());
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -178,7 +217,7 @@ struct _ThenImpl<void, void, PromiseT, _Promise> {
       try {
         fn();
         t.resolve();
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -186,41 +225,41 @@ struct _ThenImpl<void, void, PromiseT, _Promise> {
   }
 };
 
-// Promise<T>.error(std::function<Promise<Ret>(std::exception)>)
+// Promise<T>.error(std::function<Promise<Ret>(Unknown)>)
 // sub-implementation
 
-// pm.error(std::function<Promise<Ret>(std::exception)>) sub-implementation
+// pm.error(std::function<Promise<Ret>(Unknown)>) sub-implementation
 template <typename Ret, template <typename T> class PromiseT, typename _Promise>
 struct _ErrorPromiseImpl {
   static PromiseT<Ret> apply(
       const std::shared_ptr<_Promise>& pm,
-      const std::function<PromiseT<Ret>(const std::exception&)>& fn) {
+      const std::function<PromiseT<Ret>(const Unknown&)>& fn) {
     PromiseT<Ret> t;
-    pm->error([t, fn](const std::exception& val) -> void {
+    pm->error([t, fn](const Unknown& val) -> void {
       try {
         PromiseT<Ret> tmp = fn(val);
         tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
     return t;
   }
 };
-// pm.error(std::function<Promise<void>(std::exception)>) sub-implementation
+// pm.error(std::function<Promise<void>(Unknown)>) sub-implementation
 template <template <typename T> class PromiseT, typename _Promise>
 struct _ErrorPromiseImpl<void, PromiseT, _Promise> {
   static PromiseT<void> apply(
       const std::shared_ptr<_Promise>& pm,
-      const std::function<PromiseT<void>(const std::exception&)>& fn) {
+      const std::function<PromiseT<void>(const Unknown&)>& fn) {
     PromiseT<void> t;
-    pm->error([t, fn](const std::exception& val) -> void {
+    pm->error([t, fn](const Unknown& val) -> void {
       try {
         PromiseT<void> tmp = fn(val);
         tmp.then([t]() -> void { t.resolve(); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -229,43 +268,41 @@ struct _ErrorPromiseImpl<void, PromiseT, _Promise> {
 };
 
 // Promise<T>.error implementation
-// pm.error(std::function<Ret(std::exception)>) implementation
+// pm.error(std::function<Ret(Unknown)>) implementation
 template <typename Ret, template <typename T> class PromiseT, typename _Promise>
 struct _ErrorImpl {
-  static PromiseT<Ret> apply(
-      const std::shared_ptr<_Promise>& pm,
-      const std::function<Ret(const std::exception&)>& fn) {
+  static PromiseT<Ret> apply(const std::shared_ptr<_Promise>& pm,
+                             const std::function<Ret(const Unknown&)>& fn) {
     PromiseT<Ret> t;
-    pm->error([t, fn](const std::exception& err) -> void {
+    pm->error([t, fn](const Unknown& err) -> void {
       try {
         t.resolve(fn(err));
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
     return t;
   }
 };
-// pm.error(std::function<Promise<Ret>(std::exception)>) implementation
+// pm.error(std::function<Promise<Ret>(Unknown)>) implementation
 template <typename Ret, template <typename T> class PromiseT, typename _Promise>
 struct _ErrorImpl<PromiseT<Ret>, PromiseT, _Promise> {
   static PromiseT<Ret> apply(
       const std::shared_ptr<_Promise>& pm,
-      const std::function<PromiseT<Ret>(const std::exception&)>& fn) {
+      const std::function<PromiseT<Ret>(const Unknown&)>& fn) {
     return _ErrorPromiseImpl<Ret, PromiseT, _Promise>::apply(pm, fn);
   }
 };
-// pm.error(std::function<void(std::exception)>) implementation
+// pm.error(std::function<void(Unknown)>) implementation
 template <template <typename T> class PromiseT, typename _Promise>
 struct _ErrorImpl<void, PromiseT, _Promise> {
-  static PromiseT<void> apply(
-      const std::shared_ptr<_Promise>& pm,
-      const std::function<void(const std::exception&)>& fn) {
+  static PromiseT<void> apply(const std::shared_ptr<_Promise>& pm,
+                              const std::function<void(const Unknown&)>& fn) {
     PromiseT<void> t;
-    pm->error([t, fn](const std::exception& err) -> void {
+    pm->error([t, fn](const Unknown& err) -> void {
       try {
         fn(err);
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
         return;
       }
@@ -286,8 +323,8 @@ struct _FinallyPromiseImpl {
       try {
         PromiseT<Ret> tmp = fn();
         tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -304,8 +341,8 @@ struct _FinallyPromiseImpl<void, PromiseT, _Promise> {
       try {
         PromiseT<void> tmp = fn();
         tmp.then([t]() -> void { t.resolve(); });
-        tmp.error([t](const std::exception& err) -> void { t.reject(err); });
-      } catch (const std::exception& err) {
+        tmp.error([t](const Unknown& err) -> void { t.reject(err); });
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -323,7 +360,7 @@ struct _FinallyImpl {
     pm->finally([t, fn]() -> void {
       try {
         t.resolve(fn());
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
       }
     });
@@ -347,7 +384,7 @@ struct _FinallyImpl<void, PromiseT, _Promise> {
     pm->finally([t, fn]() -> void {
       try {
         fn();
-      } catch (const std::exception& err) {
+      } catch (const Unknown& err) {
         t.reject(err);
         return;
       }
@@ -374,7 +411,7 @@ template <typename T>
 class Promise {
   struct _Promise {
     typedef std::function<void(const T&)> type;
-    typedef std::function<void(const std::exception&)> error_type;
+    typedef std::function<void(const Unknown&)> error_type;
     typedef std::function<void()> finally_type;
     void then(const type& fn) {
       _then = fn;
@@ -385,7 +422,7 @@ class Promise {
     void error(const error_type& fn) {
       _error = fn;
       if (_status == Rejected) {
-        _error(*(std::exception*)_val);
+        _error(_val.err);
       }
     }
     void finally(const finally_type& fn) {
@@ -402,10 +439,10 @@ class Promise {
         if (_finally) _finally();
       }
     }
-    void reject(const std::exception& err) {
+    void reject(const Unknown& err) {
       if (_status == Pending) {
         _status = Rejected;
-        *(std::exception*)_val = err;
+        *(Unknown*)_val = err;
         if (_error) _error(err);
         if (_finally) _finally();
       }
@@ -416,7 +453,7 @@ class Promise {
       if (val._status == Resolved) {
         *(T*)_val = *(const T*)val._val;
       } else if (val._status == Rejected) {
-        *(std::exception*)_val = *(const std::exception*)val._val;
+        *(Unknown*)_val = *(const Unknown*)val._val;
       }
     }
     _Promise& operator=(const _Promise& rhs) {
@@ -426,7 +463,7 @@ class Promise {
       if (_status == Resolved) {
         ((T*)_val)->~T();
       } else if (_status == Rejected) {
-        ((std::exception*)_val)->~exception();
+        ((Unknown*)_val)->~Unknown();
       }
     }
 
@@ -435,11 +472,9 @@ class Promise {
     type _then;
     error_type _error;
     finally_type _finally;
-    alignas(alignof(T) > alignof(std::exception)
-                ? sizeof(T)
-                : sizeof(std::exception)) unsigned char _val
-        [sizeof(T) > sizeof(std::exception) ? sizeof(T)
-                                            : sizeof(std::exception)];
+    alignas(alignof(T) > alignof(Unknown) ? sizeof(T)
+                                          : sizeof(Unknown)) unsigned char _val
+        [sizeof(T) > sizeof(Unknown) ? sizeof(T) : sizeof(Unknown)];
   };
   std::shared_ptr<_Promise> pm;
 
@@ -470,10 +505,9 @@ class Promise {
    */
   template <typename U>
   Promise<typename remove_promise<
-      decltype(std::declval<U>()(std::declval<std::exception>())),
-      Promise>::type>
+      decltype(std::declval<U>()(std::declval<Unknown>())), Promise>::type>
   error(const U& fn) const {
-    using Ret = decltype(std::declval<U>()(std::declval<std::exception>()));
+    using Ret = decltype(std::declval<U>()(std::declval<Unknown>()));
     return _ErrorImpl<Ret, Promise, _Promise>::apply(pm, fn);
   }
   /**
@@ -502,7 +536,7 @@ class Promise {
    *
    * @param err 异常。
    */
-  void reject(const std::exception& value) const { pm->reject(value); }
+  void reject(const Unknown& value) const { pm->reject(value); }
   /**
    * @brief 获得Promise的状态。
    *
@@ -519,7 +553,7 @@ template <>
 class Promise<void> {
   struct _Promise {
     typedef std::function<void()> type;
-    typedef std::function<void(const std::exception&)> error_type;
+    typedef std::function<void(const Unknown&)> error_type;
     typedef std::function<void()> finally_type;
     void then(const type& fn) {
       _then = fn;
@@ -546,7 +580,7 @@ class Promise<void> {
         if (_finally) _finally();
       }
     }
-    void reject(const std::exception& err) {
+    void reject(const Unknown& err) {
       if (_status == Pending) {
         _status = Rejected;
         _val = err;
@@ -562,7 +596,7 @@ class Promise<void> {
     type _then;
     error_type _error;
     finally_type _finally;
-    std::exception _val;
+    Unknown _val;
   };
   std::shared_ptr<_Promise> pm;
 
@@ -592,10 +626,9 @@ class Promise<void> {
    */
   template <typename U>
   Promise<typename remove_promise<
-      decltype(std::declval<U>()(std::declval<std::exception>())),
-      Promise>::type>
+      decltype(std::declval<U>()(std::declval<Unknown>())), Promise>::type>
   error(const U& fn) const {
-    using Ret = decltype(std::declval<U>()(std::declval<std::exception>()));
+    using Ret = decltype(std::declval<U>()(std::declval<Unknown>()));
     return _ErrorImpl<Ret, Promise, _Promise>::apply(pm, fn);
   }
   /**
@@ -624,7 +657,7 @@ class Promise<void> {
    *
    * @param err 异常。
    */
-  void reject(const std::exception& value) const { pm->reject(value); }
+  void reject(const Unknown& value) const { pm->reject(value); }
   /**
    * @brief 获得Promise的状态。
    *
@@ -669,7 +702,7 @@ Promise<Value> resolve(const Promise<Value>& val) {
  * @return Promise<Value> 已经 Rejected 的 Promise
  */
 template <typename Value>
-Promise<Value> reject(const std::exception& err) {
+Promise<Value> reject(const Unknown& err) {
   Promise<Value> tmp;
   tmp.reject(err);
   return tmp;
@@ -691,7 +724,7 @@ struct _promise_all {
           }
         });
     std::get<N>(t).error(
-        [pm](const std::exception&) -> void { pm.reject(std::exception()); });
+        [pm](const Unknown&) -> void { pm.reject(Unknown()); });
   }
 };
 template <typename ResultType, typename Tuple, size_t TOTAL>
@@ -709,7 +742,7 @@ struct _promise_all<ResultType, Tuple, TOTAL, 0> {
           }
         });
     std::get<0>(t).error(
-        [pm](const std::exception&) -> void { pm.reject(std::exception()); });
+        [pm](const Unknown&) -> void { pm.reject(Unknown()); });
   }
 };
 /**
@@ -741,9 +774,9 @@ struct _promise_any {
         [pm](const typename std::tuple_element<N, ResultType>::type&) -> void {
           pm.resolve();
         });
-    std::get<N>(t).error([pm, fail_count](const std::exception&) -> void {
+    std::get<N>(t).error([pm, fail_count](const Unknown&) -> void {
       if ((++(*fail_count)) == TOTAL) {
-        pm.reject(std::exception());
+        pm.reject(Unknown());
       }
     });
   }
@@ -756,9 +789,9 @@ struct _promise_any<ResultType, Tuple, TOTAL, 0> {
         [pm](const typename std::tuple_element<0, ResultType>::type&) -> void {
           pm.resolve();
         });
-    std::get<0>(t).error([pm, fail_count](const std::exception&) -> void {
+    std::get<0>(t).error([pm, fail_count](const Unknown&) -> void {
       if ((++(*fail_count)) == TOTAL) {
-        pm.reject(std::exception());
+        pm.reject(Unknown());
       }
     });
   }
