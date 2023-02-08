@@ -9,7 +9,7 @@
 #include <tuple>
 namespace Promise {
 /**
- * @brief 类型安全的最小 any 实现，用于异常。
+ * @brief 类型安全的最小 any 实现。
  */
 typedef class Unknown {
   typedef struct Base {
@@ -23,9 +23,7 @@ typedef class Unknown {
     virtual std::unique_ptr<Base> clone() const override {
       return std::unique_ptr<Base>(new Derived<T>(data));
     }
-    virtual const std::type_info& type() const override {
-      return typeid(T);
-    }
+    virtual const std::type_info& type() const override { return typeid(T); }
     Derived(const T& data) : data(data) {}
   };
   std::unique_ptr<Base> ptr;
@@ -36,9 +34,7 @@ typedef class Unknown {
   Unknown(const T& val) : ptr(std::unique_ptr<Base>(new Derived<T>(val))) {}
   Unknown(const Unknown& val) : ptr(val.ptr ? val.ptr->clone() : nullptr) {}
   Unknown& operator=(const Unknown& rhs) { return *new (this) Unknown(rhs); }
-  const std::type_info& type() const {
-    return ptr->type();
-  }
+  const std::type_info& type() const { return ptr->type(); }
   template <typename T>
   const T& cast() const {
     Unknown::Derived<T>* _ptr = dynamic_cast<Unknown::Derived<T>*>(ptr.get());
@@ -74,6 +70,7 @@ struct _ThenPromiseImpl {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -94,6 +91,7 @@ struct _ThenPromiseImpl<void, ArgType, PromiseT, _Promise> {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -113,6 +111,7 @@ struct _ThenPromiseImpl<Ret, void, PromiseT, _Promise> {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -131,6 +130,7 @@ struct _ThenPromiseImpl<void, void, PromiseT, _Promise> {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -150,6 +150,7 @@ struct _ThenImpl {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -178,6 +179,7 @@ struct _ThenImpl<void, ArgType, PromiseT, _Promise> {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -196,6 +198,7 @@ struct _ThenImpl<Ret, void, PromiseT, _Promise> {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -221,6 +224,7 @@ struct _ThenImpl<void, void, PromiseT, _Promise> {
         t.reject(err);
       }
     });
+    pm->error([t](const Unknown& err) -> void { t.reject(err); });
     return t;
   }
 };
@@ -422,7 +426,7 @@ class Promise {
     void error(const error_type& fn) {
       _error = fn;
       if (_status == Rejected) {
-        _error(_val.err);
+        _error(*(Unknown*)_val);
       }
     }
     void finally(const finally_type& fn) {
@@ -449,16 +453,7 @@ class Promise {
     }
     constexpr Status status() const noexcept { return _status; }
     _Promise() : _status(Pending) {}
-    _Promise(const _Promise& val) : _status(val._status) {
-      if (val._status == Resolved) {
-        *(T*)_val = *(const T*)val._val;
-      } else if (val._status == Rejected) {
-        *(Unknown*)_val = *(const Unknown*)val._val;
-      }
-    }
-    _Promise& operator=(const _Promise& rhs) {
-      return *new (this) _Promise(rhs);
-    }
+    _Promise(const _Promise& val) = delete;
     ~_Promise() {
       if (_status == Resolved) {
         ((T*)_val)->~T();
@@ -589,6 +584,7 @@ class Promise<void> {
       }
     }
     constexpr Status status() const noexcept { return _status; }
+    _Promise(const _Promise& val) = delete;
     _Promise() : _status(Pending) {}
 
    private:

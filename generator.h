@@ -154,8 +154,6 @@ typedef struct _BaseContext {
     _ctx.uc_link = nullptr;
     makecontext(&_ctx, fn, 1, arg);
   }
-  _BaseContext(_BaseContext&& v)
-      : _ctx(std::move(v._ctx)), _stack(std::move(v._stack)) {}
   _BaseContext(const _BaseContext&) = delete;
 
  protected:
@@ -180,8 +178,6 @@ struct _BaseGenerator {
   explicit _BaseGenerator(const std::function<Fn>& fn, void (*run_fn)(void),
                           void* arg)
       : fn(fn), ctx(run_fn, arg) {}
-  explicit _BaseGenerator(_BaseGenerator&& v)
-      : fn(std::move(v.fn)), ctx(std::move(v.ctx)) {}
   explicit _BaseGenerator(const _BaseGenerator& v) = delete;
 };
 // ctx->yield(T) implementation
@@ -200,10 +196,13 @@ struct _AwaitImpl {
   static T apply(typename Gen::Context* ctx, const Promise::Promise<T>& value) {
     if (ctx->_status != Gen::Active) throw std::bad_function_call();
     ctx->_status = Gen::Awaiting;
-    ctx->_pm_result =
-        value.then([](const T& v) { return Promise::Unknown(v); });
+    ctx->_result = value.then([](const T& v) { return Promise::Unknown(v); });
     ctx->_switch_ctx();
-    return ctx->_pm_result.template cast<T>();
+    if (ctx->_failbit) {
+      ctx->_failbit = false;
+      throw ctx->_result;
+    }
+    return ctx->_result.template cast<T>();
   }
 };
 // ctx->await(Promise::Promise<void>) implementation
@@ -213,8 +212,12 @@ struct _AwaitImpl<void, Gen> {
                     const Promise::Promise<void>& value) {
     if (ctx->_status != Gen::Active) throw std::bad_function_call();
     ctx->_status = Gen::Awaiting;
-    ctx->_pm_result = value.then([]() { return Promise::Unknown(); });
+    ctx->_result = value.then([]() { return Promise::Unknown(); });
     ctx->_switch_ctx();
+    if (ctx->_failbit) {
+      ctx->_failbit = false;
+      throw ctx->_result;
+    }
   }
 };
 /**
@@ -250,8 +253,6 @@ struct Generator {
     }
     Context(void (*fn)(void), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
-    Context(Context&& v)
-        : _BaseContext(std::move(v)), _status(std::move(v._status)) {}
     Context(const Context&) = delete;
     friend struct Generator;
     friend struct _YieldImpl<RetType, YieldType, Generator>;
@@ -290,6 +291,10 @@ struct Generator {
     } catch (const Promise::Unknown& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
+    } catch (...) {
+      throw std::invalid_argument(
+          "Forwarding unknown type exceptions are not supported; use "
+          "'Promise::Unknown' instead.");
     }
     setcontext(&self->ctx._ctx);
   }
@@ -353,8 +358,6 @@ struct Generator<void, YieldType> {
     }
     Context(void (*fn)(void), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
-    Context(Context&& v)
-        : _BaseContext(std::move(v)), _status(std::move(v._status)) {}
     Context(const Context&) = delete;
     friend struct Generator;
     friend struct _YieldImpl<void, YieldType, Generator>;
@@ -389,6 +392,10 @@ struct Generator<void, YieldType> {
     } catch (const Promise::Unknown& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
+    } catch (...) {
+      throw std::invalid_argument(
+          "Forwarding unknown type exceptions are not supported; use "
+          "'Promise::Unknown' instead.");
     }
     setcontext(&self->ctx._ctx);
   }
@@ -465,11 +472,7 @@ struct AsyncGenerator {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
     Context(void (*fn)(void), void* arg)
-        : _BaseContext(fn, arg), _status(Pending) {}
-    Context(Context&& v)
-        : _BaseContext(std::move(v)),
-          _status(std::move(v._status)),
-          _pm_result(std::move(v._pm_result)) {}
+        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
     friend struct _YieldImpl<RetType, YieldType, AsyncGenerator>;
@@ -477,9 +480,9 @@ struct AsyncGenerator {
     friend struct _AwaitImpl;
 
    private:
-    Status _status;
-    Promise::Unknown _pm_result;
     Promise::Unknown _result;
+    Status _status;
+    bool _failbit;
   } Context;
 
  private:
@@ -492,9 +495,15 @@ struct AsyncGenerator {
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._pm_result.template cast<Promise::Promise<Promise::Unknown>>().then(
-            [tmp](const Promise::Unknown& v) {
-              tmp->ctx._pm_result = v;
+        return _ctx->ctx._result
+            .template cast<Promise::Promise<Promise::Unknown>>()
+            .then([tmp](const Promise::Unknown& v) {
+              tmp->ctx._result = v;
+              return _next(tmp);
+            })
+            .error([tmp](const Promise::Unknown& err) {
+              tmp->ctx._result = err;
+              tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
@@ -504,14 +513,12 @@ struct AsyncGenerator {
         return Promise::resolve(Result<RetType, YieldType>::generate_ret(
             _ctx->ctx._result.template cast<RetType>()));
       }
-      return Promise::reject(
-          _ctx->ctx._result);
+      return Promise::reject(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
       return Promise::resolve(Result<RetType, YieldType>::generate_ret(
           _ctx->ctx._result.template cast<RetType>()));
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject(
-          _ctx->ctx._result);
+      return Promise::reject(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -522,6 +529,10 @@ struct AsyncGenerator {
     } catch (const Promise::Unknown& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
+    } catch (...) {
+      throw std::invalid_argument(
+          "Forwarding unknown type exceptions are not supported; use "
+          "'Promise::Unknown' instead.");
     }
     setcontext(&self->ctx._ctx);
   }
@@ -599,11 +610,7 @@ struct AsyncGenerator<void, YieldType> {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
     Context(void (*fn)(void), void* arg)
-        : _BaseContext(fn, arg), _status(Pending) {}
-    Context(Context&& v)
-        : _BaseContext(std::move(v)),
-          _status(std::move(v._status)),
-          _pm_result(std::move(v._pm_result)) {}
+        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
     friend struct _YieldImpl<void, YieldType, AsyncGenerator>;
@@ -611,9 +618,9 @@ struct AsyncGenerator<void, YieldType> {
     friend struct _AwaitImpl;
 
    private:
-    Status _status;
-    Promise::Unknown _pm_result;
     Promise::Unknown _result;
+    Status _status;
+    bool _failbit;
   } Context;
 
  private:
@@ -626,9 +633,15 @@ struct AsyncGenerator<void, YieldType> {
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._pm_result.template cast<Promise::Promise<Promise::Unknown>>()
+        return _ctx->ctx._result
+            .template cast<Promise::Promise<Promise::Unknown>>()
             .then([tmp](const Promise::Unknown& v) {
-              tmp->ctx._pm_result = v;
+              tmp->ctx._result = v;
+              return _next(tmp);
+            })
+            .error([tmp](const Promise::Unknown& err) {
+              tmp->ctx._result = err;
+              tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
@@ -637,13 +650,11 @@ struct AsyncGenerator<void, YieldType> {
       } else if (_ctx->ctx._status == Returned) {
         return Promise::resolve(Result<void, YieldType>::generate_ret());
       }
-      return Promise::reject<Result<void, YieldType>>(
-          _ctx->ctx._result);
+      return Promise::reject<Result<void, YieldType>>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
       return Promise::resolve(Result<void, YieldType>::generate_ret());
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject<Result<void, YieldType>>(
-          _ctx->ctx._result);
+      return Promise::reject<Result<void, YieldType>>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -654,6 +665,10 @@ struct AsyncGenerator<void, YieldType> {
     } catch (const Promise::Unknown& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
+    } catch (...) {
+      throw std::invalid_argument(
+          "Forwarding unknown type exceptions are not supported; use "
+          "'Promise::Unknown' instead.");
     }
     setcontext(&self->ctx._ctx);
   }
@@ -719,20 +734,16 @@ struct AsyncGenerator<RetType, void> {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
     Context(void (*fn)(void), void* arg)
-        : _BaseContext(fn, arg), _status(Pending) {}
-    Context(Context&& v)
-        : _BaseContext(std::move(v)),
-          _status(std::move(v._status)),
-          _pm_result(std::move(v._pm_result)) {}
+        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
     template <typename T, typename GeneratorT>
     friend struct _AwaitImpl;
 
    private:
-    Status _status;
-    Promise::Unknown _pm_result;
     Promise::Unknown _result;
+    Status _status;
+    bool _failbit;
   } Context;
 
  private:
@@ -743,21 +754,25 @@ struct AsyncGenerator<RetType, void> {
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._pm_result.template cast<Promise::Promise<Promise::Unknown>>()
+        return _ctx->ctx._result
+            .template cast<Promise::Promise<Promise::Unknown>>()
             .then([tmp](const Promise::Unknown& v) {
-              tmp->ctx._pm_result = v;
+              tmp->ctx._result = v;
+              return _next(tmp);
+            })
+            .error([tmp](const Promise::Unknown& err) {
+              tmp->ctx._result = err;
+              tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
         return Promise::resolve(_ctx->ctx._result.template cast<RetType>());
       }
-      return Promise::reject<RetType>(
-          _ctx->ctx._result);
+      return Promise::reject<RetType>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
       return Promise::resolve(_ctx->ctx._result.template cast<RetType>());
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject<RetType>(
-          _ctx->ctx._result);
+      return Promise::reject<RetType>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -768,6 +783,10 @@ struct AsyncGenerator<RetType, void> {
     } catch (const Promise::Unknown& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
+    } catch (...) {
+      throw std::invalid_argument(
+          "Forwarding unknown type exceptions are not supported; use "
+          "'Promise::Unknown' instead.");
     }
     setcontext(&self->ctx._ctx);
   }
@@ -831,20 +850,16 @@ struct AsyncGenerator<void, void> {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
     Context(void (*fn)(void), void* arg)
-        : _BaseContext(fn, arg), _status(Pending) {}
-    Context(Context&& v)
-        : _BaseContext(std::move(v)),
-          _status(std::move(v._status)),
-          _pm_result(std::move(v._pm_result)) {}
+        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
     template <typename T, typename GeneratorT>
     friend struct _AwaitImpl;
 
    private:
-    Status _status;
-    Promise::Unknown _pm_result;
     Promise::Unknown _result;
+    Status _status;
+    bool _failbit;
   } Context;
 
  private:
@@ -855,22 +870,25 @@ struct AsyncGenerator<void, void> {
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._pm_result
+        return _ctx->ctx._result
             .template cast<Promise::Promise<Promise::Unknown>>()
             .then([tmp](const Promise::Unknown& v) {
-              tmp->ctx._pm_result = v;
+              tmp->ctx._result = v;
+              return _next(tmp);
+            })
+            .error([tmp](const Promise::Unknown& err) {
+              tmp->ctx._result = err;
+              tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
         return Promise::resolve();
       }
-      return Promise::reject<void>(
-          _ctx->ctx._result);
+      return Promise::reject<void>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
       return Promise::resolve();
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject<void>(
-          _ctx->ctx._result);
+      return Promise::reject<void>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -881,6 +899,10 @@ struct AsyncGenerator<void, void> {
     } catch (const Promise::Unknown& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
+    } catch (...) {
+      throw std::invalid_argument(
+          "Forwarding unknown type exceptions are not supported; use "
+          "'Promise::Unknown' instead.");
     }
     setcontext(&self->ctx._ctx);
   }
