@@ -7,6 +7,7 @@
 #include <chrono>
 #include <functional>
 #include <list>
+#include <thread>
 
 namespace Awacorn {
 template <typename T>
@@ -88,15 +89,7 @@ typedef class EventLoop {
     if (min != _event.cend()) {
       std::chrono::high_resolution_clock::duration duration = min->timeout;
       if (duration != std::chrono::high_resolution_clock::duration(0)) {
-        struct timespec ts;
-        ts.tv_sec =
-            std::chrono::duration_cast<std::chrono::seconds>(duration).count();
-        ts.tv_nsec =
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                duration -
-                std::chrono::duration_cast<std::chrono::seconds>(duration))
-                .count();
-        nanosleep(&ts, nullptr);
+        std::this_thread::sleep_for(duration);
       }
       for (std::list<Event>::iterator it = _event.begin(); it != _event.end();
            it++)

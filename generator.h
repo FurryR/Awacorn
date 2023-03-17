@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <typeinfo>
 #include <vector>
 
@@ -145,14 +146,14 @@ constexpr size_t STACK_SIZE = 1024 * 128;  // 默认 128K 栈大小
  * @brief 生成器上下文基类。
  */
 typedef struct _BaseContext {
-  _BaseContext(void (*fn)(void), void* arg)
+  _BaseContext(void (*fn)(void*), void* arg)
       : _stack(std::vector<char>(STACK_SIZE)) {
     getcontext(&_ctx);
     _ctx.uc_stack.ss_sp = _stack.data();
     _ctx.uc_stack.ss_size = _stack.size();
     _ctx.uc_stack.ss_flags = 0;
     _ctx.uc_link = nullptr;
-    makecontext(&_ctx, fn, 1, arg);
+    makecontext(&_ctx, (void (*)(void))fn, 1, arg);
   }
   _BaseContext(const _BaseContext&) = delete;
 
@@ -175,9 +176,8 @@ template <typename Fn, typename Context>
 struct _BaseGenerator {
   std::function<Fn> fn;
   Context ctx;
-  explicit _BaseGenerator(const std::function<Fn>& fn, void (*run_fn)(void),
-                          void* arg)
-      : fn(fn), ctx(run_fn, arg) {}
+  explicit _BaseGenerator(const std::function<Fn>& fn, void (*run_fn)(void*))
+      : fn(fn), ctx(run_fn, this) {}
   explicit _BaseGenerator(const _BaseGenerator& v) = delete;
 };
 // ctx->yield(T) implementation
@@ -251,7 +251,7 @@ struct Generator {
     void yield(const YieldType& value) {
       _YieldImpl<RetType, YieldType, Generator>::apply(this, value);
     }
-    Context(void (*fn)(void), void* arg)
+    Context(void (*fn)(void*), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
     Context(const Context&) = delete;
     friend struct Generator;
@@ -321,9 +321,7 @@ struct Generator {
    * @param fn 生成器内部的函数。
    */
   explicit Generator(const decltype(_type::fn)& fn) {
-    _type* ptr = (decltype(ptr)) new char[sizeof(_type)];
-    new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>(ptr);
+    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
 /**
@@ -356,7 +354,7 @@ struct Generator<void, YieldType> {
     void yield(const YieldType& value) {
       _YieldImpl<void, YieldType, Generator>::apply(this, value);
     }
-    Context(void (*fn)(void), void* arg)
+    Context(void (*fn)(void*), void* arg)
         : _BaseContext(fn, arg), _status(Pending) {}
     Context(const Context&) = delete;
     friend struct Generator;
@@ -422,9 +420,7 @@ struct Generator<void, YieldType> {
    * @param fn 生成器内部的函数。
    */
   explicit Generator(const decltype(_type::fn)& fn) {
-    _type* ptr = (decltype(ptr)) new char[sizeof(_type)];
-    new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>(ptr);
+    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
 /**
@@ -471,7 +467,7 @@ struct AsyncGenerator {
     T await(const Promise::Promise<T>& value) {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
-    Context(void (*fn)(void), void* arg)
+    Context(void (*fn)(void*), void* arg)
         : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
@@ -561,9 +557,7 @@ struct AsyncGenerator {
    * @param fn 生成器内部的函数。
    */
   explicit AsyncGenerator(const decltype(_type::fn)& fn) {
-    _type* ptr = (decltype(ptr)) new char[sizeof(_type)];
-    new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>(ptr);
+    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
 /**
@@ -609,7 +603,7 @@ struct AsyncGenerator<void, YieldType> {
     T await(const Promise::Promise<T>& value) {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
-    Context(void (*fn)(void), void* arg)
+    Context(void (*fn)(void*), void* arg)
         : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
@@ -695,9 +689,7 @@ struct AsyncGenerator<void, YieldType> {
    * @param fn 生成器内部的函数。
    */
   explicit AsyncGenerator(const decltype(_type::fn)& fn) {
-    _type* ptr = (decltype(ptr)) new char[sizeof(_type)];
-    new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>(ptr);
+    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
 /**
@@ -733,7 +725,7 @@ struct AsyncGenerator<RetType, void> {
     T await(const Promise::Promise<T>& value) {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
-    Context(void (*fn)(void), void* arg)
+    Context(void (*fn)(void*), void* arg)
         : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
@@ -813,9 +805,7 @@ struct AsyncGenerator<RetType, void> {
    * @param fn 生成器内部的函数。
    */
   explicit AsyncGenerator(const decltype(_type::fn)& fn) {
-    _type* ptr = (decltype(ptr)) new char[sizeof(_type)];
-    new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>(ptr);
+    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
 /**
@@ -849,7 +839,7 @@ struct AsyncGenerator<void, void> {
     T await(const Promise::Promise<T>& value) {
       return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
     }
-    Context(void (*fn)(void), void* arg)
+    Context(void (*fn)(void*), void* arg)
         : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
     Context(const Context&) = delete;
     friend struct AsyncGenerator;
@@ -928,9 +918,7 @@ struct AsyncGenerator<void, void> {
    * @param fn 生成器内部的函数。
    */
   explicit AsyncGenerator(const decltype(_type::fn)& fn) {
-    char* ptr = new char[sizeof(_type)];
-    new (ptr) _type(fn, (void (*)(void))run_fn, ptr);
-    _ctx = std::shared_ptr<_type>((_type*)ptr);
+    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
 }  // namespace Generator
