@@ -20,10 +20,10 @@ typedef class Unknown {
   template <typename T>
   struct Derived : Base {
     T data;
-    virtual std::unique_ptr<Base> clone() const override {
+    std::unique_ptr<Base> clone() const override {
       return std::unique_ptr<Base>(new Derived<T>(data));
     }
-    virtual const std::type_info& type() const override { return typeid(T); }
+    const std::type_info& type() const override { return typeid(T); }
     Derived(const T& data) : data(data) {}
   };
   std::unique_ptr<Base> ptr;

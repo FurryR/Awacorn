@@ -12,7 +12,7 @@
 #include <typeinfo>
 #include <vector>
 
-#include "./promise.h"
+#include "promise"
 
 namespace Generator {
 
