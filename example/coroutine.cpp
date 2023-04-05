@@ -1,29 +1,27 @@
 #include <iostream>
 
-#include "awacorn"
-#include "generator"
+#include "awacorn/event"
+#include "awacorn/generator"
 
-Awacorn::AsyncFn<Promise::Promise<std::string>> async_input(
-    const std::string& str) {
-  return [str](Awacorn::EventLoop* ev) {
-    Promise::Promise<std::string> pm;
-    ev->create(
-        [str, pm](const Awacorn::EventLoop*, const Awacorn::Event*) -> void {
-          std::string input;
-          std::cout << str << std::flush;
-          std::getline(std::cin, input);
-          pm.resolve(input);
-        },
-        std::chrono::nanoseconds(0));
-    return pm;
-  };
+awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
+                                          const std::string& str) {
+  awacorn::promise<std::string> pm;
+  ev->create(
+      [str, pm](const awacorn::event*) -> void {
+        std::string input;
+        std::cout << str << std::flush;
+        std::getline(std::cin, input);
+        pm.resolve(input);
+      },
+      std::chrono::nanoseconds(0));
+  return pm;
 }
 int main() {
-  Awacorn::EventLoop ev;
-  Generator::AsyncGenerator<void>(
-      [&](Generator::AsyncGenerator<void>::Context* ctx) -> void {
+  awacorn::event_loop ev;
+  awacorn::async_generator<void>(
+      [&](awacorn::async_generator<void>::context* ctx) -> void {
         std::cout << "Hello World. Input your name" << std::endl;
-        std::string name = ctx->await(ev.run(async_input("Your name: ")));
+        std::string name = ctx->await(async_input(&ev, "Your name: "));
         std::cout << "Welcome, " << name << "!" << std::endl;
       })
       .next();

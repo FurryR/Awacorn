@@ -1,5 +1,5 @@
-#ifndef _AWACORN_H
-#define _AWACORN_H
+#ifndef _EVENT_H
+#define _EVENT_H
 /**
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2022.
@@ -9,69 +9,90 @@
 #include <list>
 #include <thread>
 
-namespace Awacorn {
+namespace awacorn {
 template <typename T>
-struct _Event {
+struct basic_event {
+ protected:
   /**
    * @brief 事件类型。
    */
-  typedef std::function<void(class EventLoop*, const T*)> Fn;
+  typedef std::function<void(const T*)> fn_t;
   /**
    * @brief 事件回调函数。
    */
-  Fn fn;
+  fn_t fn;
   /**
    * @brief 对于 Interval 是循环间隔，对于 Event 无效。
    */
   std::chrono::high_resolution_clock::duration timeout;
-  explicit _Event(const Fn& fn,
-                  const std::chrono::high_resolution_clock::duration& timeout)
+
+  explicit basic_event(
+      const fn_t& fn,
+      const std::chrono::high_resolution_clock::duration& timeout)
       : fn(fn), timeout(timeout) {}
+  basic_event(const basic_event&) = delete;
+  basic_event(basic_event&& ev)
+      : fn(std::move(ev.fn)), timeout(std::move(ev.timeout)) {}
 };
 /**
  * @brief 事件的标识。
  */
-class Event : public _Event<Event> {
-  using _Event<Event>::_Event;
+class event : protected basic_event<event> {
+ public:
+  explicit event(const fn_t& fn,
+                 const std::chrono::high_resolution_clock::duration& timeout)
+      : basic_event<event>(fn, timeout) {}
+  event(const event&) = delete;
+  event(event&& ev) : basic_event<event>(std::move(ev)) {}
+  friend class event_loop;
 };
 /**
  * @brief 循环事件的标识。
  */
-struct Interval : public _Event<Interval> {
+struct interval : protected basic_event<interval> {
   /**
    * @brief 上一次的事件标识。若 Interval 还未执行，则 ev 为 nullptr。
    */
-  const Event* ev;
+  const event* ev;
   /**
    * @brief 若 pending 为 false，则代表此 Interval 已经加入事件循环，否则此
    * Interval 仍未被加入事件循环。
    */
   bool pending;
-  explicit Interval(const Fn& fn,
+
+ public:
+  explicit interval(const fn_t& fn,
                     const std::chrono::high_resolution_clock::duration& timeout)
-      : _Event<Interval>(fn, timeout), ev(nullptr), pending(true) {}
+      : basic_event<interval>(fn, timeout), ev(nullptr), pending(true) {}
+  interval(const interval&) = delete;
+  interval(interval&& intv)
+      : basic_event<interval>(std::move(intv)),
+        ev(std::move(intv.ev)),
+        pending(std::move(intv.pending)) {}
+  friend class event_loop;
 };
+
 /**
  * @brief 事件循环。
  */
-typedef class EventLoop {
-  std::list<Event> _event;
-  std::list<Interval> _intv;
+class event_loop {
+  std::list<event> _event;
+  std::list<interval> _intv;
   void _inst_intv() {
     if (_intv.empty()) return;
-    for (std::list<Interval>::iterator it = _intv.begin(); it != _intv.end();
+    for (std::list<interval>::iterator it = _intv.begin(); it != _intv.end();
          it++) {
       if (it->pending) {
-        Interval::Fn fn = it->fn;
-        Interval* ptr = &(*it);
+        interval::fn_t fn = it->fn;
+        interval* ptr = &(*it);
         it->pending = false;
         it->ev = create(
-            [ptr](EventLoop* ev, const Event*) -> void {
-              for (std::list<Interval>::iterator it = ev->_intv.begin();
-                   it != ev->_intv.end(); it++) {
+            [ptr, this](const event*) -> void {
+              for (std::list<interval>::iterator it = _intv.begin();
+                   it != this->_intv.end(); it++) {
                 if (&(*it) == ptr) {
                   it->pending = true;
-                  it->fn(ev, ptr);
+                  it->fn(ptr);
                   break;
                 }
               }
@@ -81,8 +102,8 @@ typedef class EventLoop {
     }
   }
   void _execute() {
-    std::list<Event>::iterator min = _event.end();
-    for (std::list<Event>::iterator it = _event.begin(); it != _event.end();
+    std::list<event>::iterator min = _event.end();
+    for (std::list<event>::iterator it = _event.begin(); it != _event.end();
          it++) {
       if (min == _event.end() || it->timeout < min->timeout) min = it;
     }
@@ -91,16 +112,16 @@ typedef class EventLoop {
       if (duration != std::chrono::high_resolution_clock::duration(0)) {
         std::this_thread::sleep_for(duration);
       }
-      for (std::list<Event>::iterator it = _event.begin(); it != _event.end();
+      for (std::list<event>::iterator it = _event.begin(); it != _event.end();
            it++)
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
                           : std::chrono::high_resolution_clock::duration(0);
       std::chrono::high_resolution_clock::time_point st =
           std::chrono::high_resolution_clock::now();
-      min->fn(this, &(*min)), _event.erase(min);
+      min->fn(&(*min)), _event.erase(min);
       duration = std::chrono::high_resolution_clock::now() - st;
-      for (std::list<Event>::iterator it = _event.begin(); it != _event.end();
+      for (std::list<event>::iterator it = _event.begin(); it != _event.end();
            it++)
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
@@ -117,9 +138,10 @@ typedef class EventLoop {
       }
     }
   }
-  template <typename T>
-  static const T* _create(const T& obj, std::list<T>* list) {
-    return list->push_back(obj), (const T*)&list->back();
+  template <typename T, typename... Args>
+  static const T* _create(std::list<T>* list, Args&&... args) {
+    return list->emplace_back(std::forward<Args>(args)...),
+           (const T*)&list->back();
   }
 
  public:
@@ -131,12 +153,12 @@ typedef class EventLoop {
    * @return const Event* 事件的标识，可用于clear。
    */
   template <typename Rep, typename Period>
-  const Event* create(const Event::Fn& fn,
+  const event* create(const event::fn_t& fn,
                       const std::chrono::duration<Rep, Period>& tm) {
-    return _create<Event>(
-        Event(fn, std::chrono::duration_cast<
-                      std::chrono::high_resolution_clock::duration>(tm)),
-        &_event);
+    return _create<event>(
+        &_event, fn,
+        std::chrono::duration_cast<
+            std::chrono::high_resolution_clock::duration>(tm));
   }
   /**
    * @brief 创建循环事件。
@@ -146,38 +168,27 @@ typedef class EventLoop {
    * @return const Interval* 事件的标识，可用于clear。
    */
   template <typename Rep, typename Period>
-  const Interval* create(const Interval::Fn& fn,
+  const interval* create(const interval::fn_t& fn,
                          const std::chrono::duration<Rep, Period>& tm) {
-    return _create<Interval>(
-        Interval(fn, std::chrono::duration_cast<
-                         std::chrono::high_resolution_clock::duration>(tm)),
-        &_intv);
+    return _create<interval>(
+        &_intv, fn,
+        std::chrono::duration_cast<
+            std::chrono::high_resolution_clock::duration>(tm));
   }
   /**
    * @brief 删除即将发生的事件。
    *
    * @param task 事件标识。
    */
-  void clear(const Event* task) noexcept { _clear<Event>(task, &_event); }
+  void clear(const event* task) noexcept { _clear<event>(task, &_event); }
   /**
    * @brief 删除循环事件。已经被放入队列中的事件无法取消。
    *
    * @param task 循环事件标识。
    */
-  void clear(const Interval* task) noexcept {
+  void clear(const interval* task) noexcept {
     if (task->ev && (!task->pending)) clear(task->ev);
-    _clear<Interval>(task, &_intv);
-  }
-  /**
-   * @brief 异步函数语法糖。运行指定的 AsyncFn 异步函数。
-   *
-   * @tparam Ret 函数的返回值类型。
-   * @param fn 异步函数。
-   * @return Ret 函数的返回值。
-   */
-  template <typename Ret>
-  inline Ret run(const std::function<Ret(EventLoop* ev)>& fn) {
-    return fn(this);
+    _clear<interval>(task, &_intv);
   }
   /**
    * @brief 运行事件循环。此函数将在所有事件都运行完成之后返回。
@@ -188,9 +199,10 @@ typedef class EventLoop {
       if (_event.empty() && _intv.empty()) break;
     }
   }
-  EventLoop() = default;
-} EventLoop;
-template <typename Ret>
-using AsyncFn = std::function<Ret(EventLoop*)>;
-};  // namespace Awacorn
+  event_loop() = default;
+  event_loop(event_loop&& ev)
+      : _event(std::move(ev._event)), _intv(std::move(ev._intv)) {}
+  event_loop(const event_loop&) = delete;
+};
+};  // namespace awacorn
 #endif

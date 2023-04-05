@@ -6,9 +6,9 @@
 
 ```cpp
 int main() {
-  Awacorn::EventLoop ev;
-  Generator::AsyncGenerator<void>(
-      [&](Generator::AsyncGenerator<void>::Context* ctx) -> void {
+  awacorn::event_loop ev;
+  awacorn::async_generator<void>(
+      [&](awacorn::async_generator<void>::context* ctx) -> void {
         std::cout << "Hello World. Input your name" << std::endl;
         std::string name = ctx->await(ev.run(async_input("Your name: ")));
         std::cout << "Welcome, " << name << "!" << std::endl;
@@ -28,7 +28,7 @@ int main() {
   - [文档](#文档)
     - [什么是 Awacorn?](#什么是-awacorn)
     - [使用](#使用)
-    - [Awacorn::EventLoop](#awacorneventloop)
+    - [awacorn::event\_loop](#awacornevent_loop)
       - [create](#create)
 
 ## 区别
@@ -70,20 +70,19 @@ Awacorn 可以像其它 cmake 库那样被用于你的项目。在部分平台�
 
 你可以使用 `-DAWACORN_BUILD_EXAMPLE=ON` 来同时编译示例。
 
-### Awacorn::EventLoop
+### awacorn::event_loop
 
-`Awacorn::EventLoop` 是事件循环的定义，位于头文件 `awacorn` 中。
+`awacorn::event_loop` 是事件循环的定义，位于头文件 `awacorn` 中。
 
 下面是一个使用它的示例:
 
 ```cpp
-#include "awacorn"
+#include "awacorn/event"
 // 在 main 函数内
-const Awacorn::Task* task = ev.create([](Awacorn::EventLoop* ev, const Awacorn::Event* task) -> void {
-  cout << "我不会被执行到" << endl;
-}, chrono::seconds(1));
+const awacorn::event* task = ev.create([](const awacorn::event* task) -> void {
+  std::cout << "我不会被执行到" << std::endl;
+}, std::chrono::seconds(1));
 ev.clear(task);
-
 ```
 
 #### create
@@ -93,18 +92,17 @@ ev.clear(task);
 下面是一个使用它的示例:
 
 ```cpp
-#include "awacorn"
+#include "awacorn/event"
 // 在 main 函数内
-ev.create([](Awacorn::EventLoop* ev, const Awacorn::Event* task) -> void {
-    cout << "我被执行了！" << endl;
-}, chrono::seconds(2));
+ev.create([](const awacorn::event*) -> void {
+    std::cout << "我被执行了！" << std::endl;
+}, std::chrono::seconds(2));
 ```
 
 其中:
 
-- 临时函数的第一个参数类型一定为 `Awacorn::EventLoop*`。
-- 如果需要设定事件，则临时函数的第二个参数类型应为 `const Awacorn::Event*`。
-  - 反之，如果需要设定循环事件，则临时函数的第二个参数类型应为 `const Awacorn::Interval*`。
+- 如果需要设定事件，则临时函数的第一个参数类型应为 `const awacorn::event*`。
+  - 反之，如果需要设定循环事件，则临时函数的第二个参数类型应为 `const awacorn::interval*`。
 - 当然，`create` 的返回值就是临时函数第二个参数的类型，**可以用于取消事件**。
   - 请参照 `clear` 函数。
 

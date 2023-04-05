@@ -1,10 +1,22 @@
 #ifndef _GENERATOR_H
 #define _GENERATOR_H
+#if !defined(USE_BOOST) && !defined(USE_UCONTEXT)
+#if __has_include(<boost/context/continuation.hpp>)
+#define USE_BOOST
+#elif __has_include(<ucontext.h>)
+#define USE_UCONTEXT
+#else
+#error Neither <boost/context/continuation.hpp> nor <ucontext.h> is found.
+#endif
+#endif
+#if defined(USE_BOOST)
+#include <boost/context/continuation.hpp>
+#elif defined(USE_UCONTEXT)
 #ifdef __APPLE__
 #define _XOPEN_SOURCE
 #endif
-
 #include <ucontext.h>
+#endif
 
 #include <functional>
 #include <memory>
@@ -14,7 +26,7 @@
 
 #include "promise"
 
-namespace Generator {
+namespace awacorn {
 
 /**
  * @brief 表示返回或中断值。
@@ -23,76 +35,97 @@ namespace Generator {
  * @tparam YieldType 中断的类型
  */
 template <typename RetType, typename YieldType>
-struct Result {
+struct result_t {
+  using ret_type = typename std::decay<RetType>::type;
+  using yield_type = typename std::decay<YieldType>::type;
   /**
    * @brief 结果的类型。
    */
-  typedef enum ValueType {
+  enum state_t {
     Null = 0,    // 空
     Return = 1,  // 返回类型
     Yield = 2    // 中断类型
-  } ValueType;
+  };
   /**
    * @brief 获得返回值。类型不正确则抛出 std::bad_cast 错误。
    *
-   * @return const RetType& 返回值的只读引用。
+   * @return const ret_type& 返回值的只读引用。
    */
-  const RetType& ret() const {
+  const ret_type& ret() const {
     if (_type != Return) throw std::bad_cast();
-    return *(const RetType*)_val;
+    return *(const ret_type*)_val;
   }
   /**
    * @brief 获得中断值。类型不正确则抛出 std::bad_cast 错误。
    *
    * @return const YieldType& 中断值的只读引用。
    */
-  const YieldType& yield() const {
+  const yield_type& yield() const {
     if (_type != Yield) throw std::bad_cast();
-    return *(const YieldType*)_val;
+    return *(const yield_type*)_val;
   }
   /**
    * @brief 获得结果类型。
    *
-   * @return ValueType 结果类型。
+   * @return state_t 结果类型。
    */
-  ValueType type() const noexcept { return _type; }
-  static Result<RetType, YieldType> generate_yield(const YieldType& value) {
-    Result<RetType, YieldType> tmp;
+  state_t type() const noexcept { return _type; }
+  static result_t<ret_type, yield_type> generate_yield(
+      const yield_type& value) {
+    result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    *(YieldType*)tmp._val = value;
+    *(yield_type*)tmp._val = value;
     return tmp;
   }
-  static Result<RetType, YieldType> generate_ret(const RetType& value) {
-    Result<RetType, YieldType> tmp;
+  static result_t<ret_type, yield_type> generate_yield(yield_type&& value) {
+    result_t<ret_type, yield_type> tmp;
+    tmp._type = Yield;
+    *(yield_type*)tmp._val = std::move(value);
+    return tmp;
+  }
+  static result_t<ret_type, yield_type> generate_ret(const ret_type& value) {
+    result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    *(RetType*)tmp._val = value;
+    *(ret_type*)tmp._val = value;
     return tmp;
   }
-  Result() : _type(Null) {}
-  Result(const Result<RetType, YieldType>& val) : _type(val._type) {
+  static result_t<ret_type, yield_type> generate_ret(ret_type&& value) {
+    result_t<ret_type, yield_type> tmp;
+    tmp._type = Return;
+    *(ret_type*)tmp._val = std::move(value);
+    return tmp;
+  }
+  result_t() : _type(Null) {}
+  result_t(const result_t<ret_type, yield_type>& val) : _type(val._type) {
     if (val._type == Return) {
-      *(RetType*)_val = *(const RetType*)val._val;
+      *(ret_type*)_val = *(const ret_type*)val._val;
     } else if (val._type == Yield) {
-      *(YieldType*)_val = *(const YieldType*)val._val;
+      *(yield_type*)_val = *(const yield_type*)val._val;
     }
   }
-  Result& operator=(const Result& rhs) { return *new (this) Result(rhs); }
-  ~Result() {
+  result_t(result_t<RetType, YieldType>&& val)
+      : _type(val._type), _val(val._val) {
+    val._type = Null;
+  }
+  result_t& operator=(const result_t& rhs) { return *new (this) result_t(rhs); }
+  result_t& operator=(result_t&& rhs) {
+    return *new (this) result_t(std::move(rhs));
+  }
+  ~result_t() {
     if (_type == Return) {
-      ((RetType*)_val)->~RetType();
+      ((ret_type*)_val)->~ret_type();
     } else if (_type == Yield) {
-      ((YieldType*)_val)->~YieldType();
+      ((yield_type*)_val)->~yield_type();
     }
   }
 
  private:
-  alignas(alignof(RetType) > alignof(YieldType)
-              ? sizeof(RetType)
-              : sizeof(YieldType)) unsigned char _val[sizeof(RetType) >
-                                                              sizeof(YieldType)
-                                                          ? sizeof(RetType)
-                                                          : sizeof(YieldType)];
-  ValueType _type;
+  alignas(alignof(ret_type) > alignof(yield_type)
+              ? alignof(ret_type)
+              : alignof(yield_type)) unsigned char _val
+      [sizeof(ret_type) > sizeof(yield_type) ? sizeof(ret_type)
+                                             : sizeof(yield_type)];
+  state_t _type;
 };
 /**
  * @brief 返回类型为空的返回或中断值。
@@ -100,125 +133,183 @@ struct Result {
  * @tparam YieldType 中断类型。
  */
 template <typename YieldType>
-struct Result<void, YieldType> {
+struct result_t<void, YieldType> {
+  using ret_type = void;
+  using yield_type = typename std::decay<YieldType>::type;
   /**
    * @brief 结果的类型。
    */
-  typedef enum ValueType {
+  typedef enum state_t {
     Null = 0,    // 空
     Return = 1,  // 返回类型
     Yield = 2    // 中断类型
-  } ValueType;
+  } state_t;
   /**
    * @brief 获得中断值。类型不正确则抛出 std::bad_cast 错误。
    *
    * @return const YieldType& 中断值的只读引用。
    */
-  const YieldType& yield() const {
+  const yield_type& yield() const {
     if (_type != Yield) throw std::bad_cast();
-    return _val;
+    return *(const yield_type*)_val;
   }
   /**
    * @brief 获得结果类型。
    *
-   * @return ValueType 结果类型。
+   * @return state_t 结果类型。
    */
-  ValueType type() const noexcept { return _type; }
-  static Result<void, YieldType> generate_yield(const YieldType& value) {
-    Result<void, YieldType> tmp;
+  state_t type() const noexcept { return _type; }
+  static result_t<void, yield_type> generate_yield(const yield_type& value) {
+    result_t<void, yield_type> tmp;
     tmp._type = Yield;
     tmp._val = value;
     return tmp;
   }
-  static Result<void, YieldType> generate_ret() {
-    Result<void, YieldType> tmp;
+  static result_t<void, yield_type> generate_yield(yield_type&& value) {
+    result_t<void, yield_type> tmp;
+    tmp._type = Yield;
+    tmp._val = std::move(value);
+    return tmp;
+  }
+  static result_t<void, yield_type> generate_ret() {
+    result_t<void, yield_type> tmp;
     tmp._type = Return;
     return tmp;
   }
-  Result() : _type(Null) {}
+  result_t() : _type(Null) {}
+  result_t(const result_t<ret_type, yield_type>& val) : _type(val._type) {
+    if (val._type == Yield) {
+      *(yield_type*)_val = *(const yield_type*)val._val;
+    }
+  }
+  result_t(result_t<ret_type, yield_type>&& val)
+      : _type(val._type), _val(val._val) {
+    val._type = Null;
+  }
+  result_t& operator=(const result_t& rhs) { return *new (this) result_t(rhs); }
+  result_t& operator=(result_t&& rhs) {
+    return *new (this) result_t(std::move(rhs));
+  }
+  ~result_t() {
+    if (_type == Yield) {
+      ((yield_type*)_val)->~yield_type();
+    }
+  }
 
  private:
-  YieldType _val;
-  ValueType _type;
+  alignas(alignof(yield_type)) unsigned char _val[sizeof(yield_type)];
+  state_t _type;
 };
 constexpr size_t STACK_SIZE = 1024 * 128;  // 默认 128K 栈大小
 /**
  * @brief 生成器上下文基类。
  */
-typedef struct _BaseContext {
-  _BaseContext(void (*fn)(void*), void* arg)
+typedef struct basic_context {
+  basic_context(void (*fn)(void*), void* arg)
       : _stack(std::vector<char>(STACK_SIZE)) {
+#if defined(USE_BOOST)
+    boost::context::callcc(std::allocator_arg,
+                           boost::context::fixedsize_stack(STACK_SIZE),
+                           [this, fn, arg](boost::context::continuation&& ctx) {
+                             _ctx = std::move(ctx);
+                             fn(arg);
+                             return std::move(_ctx);
+                           });
+
+#elif defined(USE_BOOST)
     getcontext(&_ctx);
     _ctx.uc_stack.ss_sp = _stack.data();
     _ctx.uc_stack.ss_size = _stack.size();
     _ctx.uc_stack.ss_flags = 0;
     _ctx.uc_link = nullptr;
     makecontext(&_ctx, (void (*)(void))fn, 1, arg);
+#else
+#error Please define "USE_UCONTEXT" or "USE_BOOST".
+#endif
   }
-  _BaseContext(const _BaseContext&) = delete;
+  basic_context(const basic_context&) = delete;
 
  protected:
+  // ctx->yield(T) implementation
+  template <typename RetType, typename YieldType, typename Gen>
+  struct __yield_impl {
+    static void apply(basic_context* ctx, const YieldType& value,
+                      typename Gen::state_t* status,
+                      result_t<RetType, YieldType>* result) {
+      if (*status != Gen::Active) throw std::bad_function_call();
+      *status = Gen::Yielded;
+      *result = value;
+      ctx->_switch_ctx();
+    }
+  };
+  // ctx->await(Promise::Promise<T>) implementation
+  template <typename T, typename Gen>
+  struct __await_impl {
+    static T apply(basic_context* ctx, const awacorn::promise<T>& value,
+                   typename Gen::state_t* status, any* result, bool* failbit) {
+      if (*status != Gen::Active) throw std::bad_function_call();
+      *status = Gen::Awaiting;
+      *result = value.then([](const T& v) { return any(v); });
+      ctx->_switch_ctx();
+      if (*failbit) {
+        *failbit = false;
+        throw *result;
+      }
+      return result->template cast<T>();
+    }
+  };
+  // ctx->await(Promise::Promise<void>) implementation
+  template <typename Gen>
+  struct __await_impl<void, Gen> {
+    static void apply(typename Gen::context* ctx,
+                      const awacorn::promise<void>& value,
+                      typename Gen::state_t* status, any* result,
+                      bool* failbit) {
+      if (*status != Gen::Active) throw std::bad_function_call();
+      *status = Gen::Awaiting;
+      *result = value.then([]() { return any(); });
+      ctx->_switch_ctx();
+      if (*failbit) {
+        *failbit = false;
+        throw *result;
+      }
+    }
+  };
   void _switch_ctx() {
+#if defined(USE_BOOST)
+    _ctx = _ctx.resume();
+#elif defined(USE_UCONTEXT)
     ucontext_t orig = _ctx;
     swapcontext(&_ctx, &orig);
+#else
+#error Please define "USE_UCONTEXT" or "USE_BOOST".
+#endif
   }
+
+ private:
+#if defined(USE_BOOST)
+  boost::context::continuation _ctx;
+#elif defined(USE_UCONTEXT)
   ucontext_t _ctx;
+#else
+#error Please define "USE_UCONTEXT" or "USE_BOOST".
+#endif
   std::vector<char> _stack;
-} _BaseContext;
+} basic_context;
 /**
  * @brief 生成器成员，用于实现智能生命周期。
  *
  * @tparam Fn 函数类型。
- * @tparam Context 上下文类型。
- * @tparam Status 状态类型。
+ * @tparam context 上下文类型。
+ * @tparam state_t 状态类型。
  */
-template <typename Fn, typename Context>
-struct _BaseGenerator {
+template <typename Fn, typename context>
+struct basic_generator {
   std::function<Fn> fn;
-  Context ctx;
-  explicit _BaseGenerator(const std::function<Fn>& fn, void (*run_fn)(void*))
+  context ctx;
+  explicit basic_generator(const std::function<Fn>& fn, void (*run_fn)(void*))
       : fn(fn), ctx(run_fn, this) {}
-  explicit _BaseGenerator(const _BaseGenerator& v) = delete;
-};
-// ctx->yield(T) implementation
-template <typename RetType, typename YieldType, typename Gen>
-struct _YieldImpl {
-  static void apply(typename Gen::Context* ctx, const YieldType& value) {
-    if (ctx->_status != Gen::Active) throw std::bad_function_call();
-    ctx->_status = Gen::Yielded;
-    ctx->_result = value;
-    ctx->_switch_ctx();
-  }
-};
-// ctx->await(Promise::Promise<T>) implementation
-template <typename T, typename Gen>
-struct _AwaitImpl {
-  static T apply(typename Gen::Context* ctx, const Promise::Promise<T>& value) {
-    if (ctx->_status != Gen::Active) throw std::bad_function_call();
-    ctx->_status = Gen::Awaiting;
-    ctx->_result = value.then([](const T& v) { return Promise::Unknown(v); });
-    ctx->_switch_ctx();
-    if (ctx->_failbit) {
-      ctx->_failbit = false;
-      throw ctx->_result;
-    }
-    return ctx->_result.template cast<T>();
-  }
-};
-// ctx->await(Promise::Promise<void>) implementation
-template <typename Gen>
-struct _AwaitImpl<void, Gen> {
-  static void apply(typename Gen::Context* ctx,
-                    const Promise::Promise<void>& value) {
-    if (ctx->_status != Gen::Active) throw std::bad_function_call();
-    ctx->_status = Gen::Awaiting;
-    ctx->_result = value.then([]() { return Promise::Unknown(); });
-    ctx->_switch_ctx();
-    if (ctx->_failbit) {
-      ctx->_failbit = false;
-      throw ctx->_result;
-    }
-  }
+  explicit basic_generator(const basic_generator& v) = delete;
 };
 /**
  * @brief 生成器。
@@ -227,21 +318,21 @@ struct _AwaitImpl<void, Gen> {
  * @tparam YieldType 中断类型。
  */
 template <typename RetType, typename YieldType>
-struct Generator {
+struct generator {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum Status {
+  typedef enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Throwed = 4    // 抛出错误
-  } Status;
+  } state_t;
   /**
    * @brief 生成器上下文。
    */
-  typedef struct Context : public _BaseContext {
+  typedef struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -249,35 +340,36 @@ struct Generator {
      * @param value 中断值。
      */
     void yield(const YieldType& value) {
-      _YieldImpl<RetType, YieldType, Generator>::apply(this, value);
+      __yield_impl<RetType, YieldType, generator>::apply(this, value);
     }
-    Context(void (*fn)(void*), void* arg)
-        : _BaseContext(fn, arg), _status(Pending) {}
-    Context(const Context&) = delete;
-    friend struct Generator;
-    friend struct _YieldImpl<RetType, YieldType, Generator>;
+    context(void (*fn)(void*), void* arg)
+        : basic_context(fn, arg), _status(Pending) {}
+    context(const context&) = delete;
+    friend struct generator;
+    friend struct __yield_impl<RetType, YieldType, generator>;
 
    private:
-    Status _status;
-    Promise::Unknown _result;
-  } Context;
+    state_t _status;
+    any _result;
+  } context;
 
  private:
-  typedef _BaseGenerator<RetType(Context*), Context> _type;
-  static Result<RetType, YieldType> _next(const std::shared_ptr<_type>& _ctx) {
+  typedef basic_generator<RetType(context*), context> _type;
+  static result_t<RetType, YieldType> _next(
+      const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Yielded) {
-        return Result<RetType, YieldType>::generate_yield(
+        return result_t<RetType, YieldType>::generate_yield(
             _ctx->ctx._result.template cast<YieldType>());
       } else if (_ctx->ctx._status == Returned) {
-        return Result<RetType, YieldType>::generate_ret(
+        return result_t<RetType, YieldType>::generate_ret(
             _ctx->ctx._result.template cast<RetType>());
       }
       throw _ctx->ctx._result;
     } else if (_ctx->ctx._status == Returned) {
-      return Result<RetType, YieldType>::generate_ret(
+      return result_t<RetType, YieldType>::generate_ret(
           _ctx->ctx._result.template cast<RetType>());
     } else if (_ctx->ctx._status == Throwed) {
       throw _ctx->ctx._result;
@@ -288,15 +380,11 @@ struct Generator {
     try {
       self->ctx._result = self->fn(&self->ctx);
       self->ctx._status = Returned;
-    } catch (const Promise::Unknown& err) {
+    } catch (const any& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
-    } catch (...) {
-      throw std::invalid_argument(
-          "Forwarding unknown type exceptions are not supported; use "
-          "'Promise::Unknown' instead.");
     }
-    setcontext(&self->ctx._ctx);
+    self->ctx._switch_ctx();
   }
 
   std::shared_ptr<_type> _ctx;
@@ -305,22 +393,22 @@ struct Generator {
   /**
    * @brief 获得当前生成器的状态。
    *
-   * @return Status 生成器状态。
+   * @return state_t 生成器状态。
    */
-  Status status() const noexcept { return _ctx->ctx._status; }
+  state_t status() const noexcept { return _ctx->ctx._status; }
   /**
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return Result<RetType, YieldType> 结果。
+   * @return result_t<RetType, YieldType> 结果。
    */
-  Result<RetType, YieldType> next() const { return _next(_ctx); }
+  result_t<RetType, YieldType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
    */
-  explicit Generator(const decltype(_type::fn)& fn) {
+  explicit generator(const decltype(_type::fn)& fn) {
     _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
@@ -330,21 +418,21 @@ struct Generator {
  * @tparam YieldType 中断类型。
  */
 template <typename YieldType>
-struct Generator<void, YieldType> {
+struct generator<void, YieldType> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum Status {
+  typedef enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Throwed = 4    // 抛出错误
-  } Status;
+  } state_t;
   /**
    * @brief 生成器上下文。
    */
-  typedef struct Context : public _BaseContext {
+  typedef struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -352,32 +440,32 @@ struct Generator<void, YieldType> {
      * @param value 中断值。
      */
     void yield(const YieldType& value) {
-      _YieldImpl<void, YieldType, Generator>::apply(this, value);
+      __yield_impl<void, YieldType, generator>::apply(this, value);
     }
-    Context(void (*fn)(void*), void* arg)
-        : _BaseContext(fn, arg), _status(Pending) {}
-    Context(const Context&) = delete;
-    friend struct Generator;
-    friend struct _YieldImpl<void, YieldType, Generator>;
+    context(void (*fn)(void*), void* arg)
+        : basic_context(fn, arg), _status(Pending) {}
+    context(const context&) = delete;
+    friend struct generator;
+    friend struct __yield_impl<void, YieldType, generator>;
 
    private:
-    Status _status;
-    Promise::Unknown _result;
-  } Context;
+    state_t _status;
+    any _result;
+  } context;
 
  private:
-  typedef _BaseGenerator<void(Context*), Context> _type;
-  static Result<void, YieldType> _next(const std::shared_ptr<_type>& _ctx) {
+  typedef basic_generator<void(context*), context> _type;
+  static result_t<void, YieldType> _next(const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Yielded) {
-        return Result<void, YieldType>::generate_yield(
+        return result_t<void, YieldType>::generate_yield(
             _ctx->ctx._result.template cast<YieldType>());
       }
       throw _ctx->ctx._result;
     } else if (_ctx->ctx._status == Returned) {
-      return Result<void, YieldType>::generate_ret();
+      return result_t<void, YieldType>::generate_ret();
     } else if (_ctx->ctx._status == Throwed) {
       throw _ctx->ctx._result;
     }
@@ -387,15 +475,11 @@ struct Generator<void, YieldType> {
     try {
       self->fn(&self->ctx);
       self->ctx._status = Returned;
-    } catch (const Promise::Unknown& err) {
+    } catch (const any& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
-    } catch (...) {
-      throw std::invalid_argument(
-          "Forwarding unknown type exceptions are not supported; use "
-          "'Promise::Unknown' instead.");
     }
-    setcontext(&self->ctx._ctx);
+    self->ctx._switch_ctx();
   }
 
   std::shared_ptr<_type> _ctx;
@@ -404,22 +488,22 @@ struct Generator<void, YieldType> {
   /**
    * @brief 获得当前生成器的状态。
    *
-   * @return Status 生成器状态。
+   * @return state_t 生成器状态。
    */
-  Status status() const noexcept { return _ctx->ctx._status; }
+  state_t status() const noexcept { return _ctx->ctx._status; }
   /**
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return Result<void, YieldType> 结果。
+   * @return result_t<void, YieldType> 结果。
    */
-  Result<void, YieldType> next() const { return _next(_ctx); }
+  result_t<void, YieldType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
    */
-  explicit Generator(const decltype(_type::fn)& fn) {
+  explicit generator(const decltype(_type::fn)& fn) {
     _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
@@ -430,22 +514,22 @@ struct Generator<void, YieldType> {
  * @tparam YieldType 中断类型。
  */
 template <typename RetType, typename YieldType = void>
-struct AsyncGenerator {
+struct async_generator {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum Status {
+  typedef enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Awaiting = 4,  // await 中
     Throwed = 5    // 抛出错误
-  } Status;
+  } state_t;
   /**
    * @brief 生成器上下文。
    */
-  typedef struct Context : public _BaseContext {
+  typedef struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -453,7 +537,7 @@ struct AsyncGenerator {
      * @param value 中断值。
      */
     void yield(const YieldType& value) {
-      _YieldImpl<RetType, YieldType, AsyncGenerator>::apply(this, value);
+      __yield_impl<RetType, YieldType, async_generator>::apply(this, value);
     }
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
@@ -464,26 +548,24 @@ struct AsyncGenerator {
      * @return T Promise 的值。
      */
     template <typename T>
-    T await(const Promise::Promise<T>& value) {
-      return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
+    T await(const awacorn::promise<T>& value) {
+      return __await_impl<T, async_generator>::apply(this, value, &_status,
+                                                     &_result, &_failbit);
     }
-    Context(void (*fn)(void*), void* arg)
-        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
-    Context(const Context&) = delete;
-    friend struct AsyncGenerator;
-    friend struct _YieldImpl<RetType, YieldType, AsyncGenerator>;
-    template <typename T, typename GeneratorT>
-    friend struct _AwaitImpl;
+    context(void (*fn)(void*), void* arg)
+        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(const context&) = delete;
+    friend struct async_generator;
 
    private:
-    Promise::Unknown _result;
-    Status _status;
+    any _result;
+    state_t _status;
     bool _failbit;
-  } Context;
+  } context;
 
  private:
-  typedef _BaseGenerator<RetType(Context*), Context> _type;
-  static Promise::Promise<Result<RetType, YieldType>> _next(
+  typedef basic_generator<RetType(context*), context> _type;
+  static awacorn::promise<result_t<RetType, YieldType>> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->_ctx._status == Awaiting || _ctx->ctx._status == Yielded ||
         _ctx->ctx._status == Pending) {
@@ -491,30 +573,30 @@ struct AsyncGenerator {
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._result
-            .template cast<Promise::Promise<Promise::Unknown>>()
-            .then([tmp](const Promise::Unknown& v) {
+        return _ctx->ctx._result.template cast<awacorn::promise<any>>()
+            .then([tmp](const any& v) {
               tmp->ctx._result = v;
               return _next(tmp);
             })
-            .error([tmp](const Promise::Unknown& err) {
+            .error([tmp](const any& err) {
               tmp->ctx._result = err;
               tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
-        return Promise::resolve(Result<RetType, YieldType>::generate_yield(
-            _ctx->ctx._result.template cast<YieldType>()));
+        return awacorn::make_resolve(
+            result_t<RetType, YieldType>::generate_yield(
+                _ctx->ctx._result.template cast<YieldType>()));
       } else if (_ctx->ctx._status == Returned) {
-        return Promise::resolve(Result<RetType, YieldType>::generate_ret(
+        return awacorn::make_resolve(result_t<RetType, YieldType>::generate_ret(
             _ctx->ctx._result.template cast<RetType>()));
       }
-      return Promise::reject(_ctx->ctx._result);
+      return awacorn::make_reject(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return Promise::resolve(Result<RetType, YieldType>::generate_ret(
+      return awacorn::make_resolve(result_t<RetType, YieldType>::generate_ret(
           _ctx->ctx._result.template cast<RetType>()));
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject(_ctx->ctx._result);
+      return awacorn::make_reject(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -522,15 +604,11 @@ struct AsyncGenerator {
     try {
       self->ctx._result = self->fn(&self->ctx);
       self->ctx._status = Returned;
-    } catch (const Promise::Unknown& err) {
+    } catch (const any& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
-    } catch (...) {
-      throw std::invalid_argument(
-          "Forwarding unknown type exceptions are not supported; use "
-          "'Promise::Unknown' instead.");
     }
-    setcontext(&self->ctx._ctx);
+    self->ctx._switch_ctx();
   }
 
   std::shared_ptr<_type> _ctx;
@@ -539,16 +617,16 @@ struct AsyncGenerator {
   /**
    * @brief 获得当前生成器的状态。
    *
-   * @return Status 生成器状态。
+   * @return state_t 生成器状态。
    */
-  Status status() const noexcept { return _ctx->ctx._status; }
+  state_t status() const noexcept { return _ctx->ctx._status; }
   /**
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return Promise::Promise<Result<RetType, YieldType>> 结果。
+   * @return Promise::Promise<result_t<RetType, YieldType>> 结果。
    */
-  Promise::Promise<Result<RetType, YieldType>> next() const {
+  awacorn::promise<result_t<RetType, YieldType>> next() const {
     return _next(_ctx);
   }
   /**
@@ -556,7 +634,7 @@ struct AsyncGenerator {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit AsyncGenerator(const decltype(_type::fn)& fn) {
+  explicit async_generator(const decltype(_type::fn)& fn) {
     _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
@@ -566,22 +644,22 @@ struct AsyncGenerator {
  * @tparam YieldType 中断类型。
  */
 template <typename YieldType>
-struct AsyncGenerator<void, YieldType> {
+struct async_generator<void, YieldType> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum Status {
+  typedef enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Awaiting = 4,  // await 中
     Throwed = 5    // 抛出错误
-  } Status;
+  } state_t;
   /**
    * @brief 生成器上下文。
    */
-  typedef struct Context : public _BaseContext {
+  typedef struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -589,7 +667,7 @@ struct AsyncGenerator<void, YieldType> {
      * @param value 中断值。
      */
     void yield(const YieldType& value) {
-      _YieldImpl<void, YieldType, AsyncGenerator>::apply(this, value);
+      __yield_impl<void, YieldType, async_generator>::apply(this, value);
     }
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
@@ -600,26 +678,24 @@ struct AsyncGenerator<void, YieldType> {
      * @return T Promise 的值。
      */
     template <typename T>
-    T await(const Promise::Promise<T>& value) {
-      return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
+    T await(const awacorn::promise<T>& value) {
+      return __await_impl<T, async_generator>::apply(this, value, &_status,
+                                                     &_result, &_failbit);
     }
-    Context(void (*fn)(void*), void* arg)
-        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
-    Context(const Context&) = delete;
-    friend struct AsyncGenerator;
-    friend struct _YieldImpl<void, YieldType, AsyncGenerator>;
-    template <typename T, typename GeneratorT>
-    friend struct _AwaitImpl;
+    context(void (*fn)(void*), void* arg)
+        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(const context&) = delete;
+    friend struct async_generator;
 
    private:
-    Promise::Unknown _result;
-    Status _status;
+    any _result;
+    state_t _status;
     bool _failbit;
-  } Context;
+  } context;
 
  private:
-  typedef _BaseGenerator<void(Context*), Context> _type;
-  static Promise::Promise<Result<void, YieldType>> _next(
+  typedef basic_generator<void(context*), context> _type;
+  static awacorn::promise<result_t<void, YieldType>> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Awaiting || _ctx->ctx._status == Yielded ||
         _ctx->ctx._status == Pending) {
@@ -627,28 +703,27 @@ struct AsyncGenerator<void, YieldType> {
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._result
-            .template cast<Promise::Promise<Promise::Unknown>>()
-            .then([tmp](const Promise::Unknown& v) {
+        return _ctx->ctx._result.template cast<awacorn::promise<any>>()
+            .then([tmp](const any& v) {
               tmp->ctx._result = v;
               return _next(tmp);
             })
-            .error([tmp](const Promise::Unknown& err) {
+            .error([tmp](const any& err) {
               tmp->ctx._result = err;
               tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
-        return Promise::resolve(Result<void, YieldType>::generate_yield(
+        return awacorn::make_resolve(result_t<void, YieldType>::generate_yield(
             _ctx->ctx._result.template cast<YieldType>()));
       } else if (_ctx->ctx._status == Returned) {
-        return Promise::resolve(Result<void, YieldType>::generate_ret());
+        return awacorn::make_resolve(result_t<void, YieldType>::generate_ret());
       }
-      return Promise::reject<Result<void, YieldType>>(_ctx->ctx._result);
+      return awacorn::make_reject<result_t<void, YieldType>>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return Promise::resolve(Result<void, YieldType>::generate_ret());
+      return awacorn::make_resolve(result_t<void, YieldType>::generate_ret());
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject<Result<void, YieldType>>(_ctx->ctx._result);
+      return awacorn::make_reject<result_t<void, YieldType>>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -656,15 +731,11 @@ struct AsyncGenerator<void, YieldType> {
     try {
       self->fn(&self->ctx);
       self->ctx._status = Returned;
-    } catch (const Promise::Unknown& err) {
+    } catch (const any& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
-    } catch (...) {
-      throw std::invalid_argument(
-          "Forwarding unknown type exceptions are not supported; use "
-          "'Promise::Unknown' instead.");
     }
-    setcontext(&self->ctx._ctx);
+    self->ctx._switch_ctx();
   }
 
   std::shared_ptr<_type> _ctx;
@@ -673,22 +744,24 @@ struct AsyncGenerator<void, YieldType> {
   /**
    * @brief 获得当前生成器的状态。
    *
-   * @return Status 生成器状态。
+   * @return state_t 生成器状态。
    */
-  Status status() const noexcept { return _ctx->ctx._status; }
+  state_t status() const noexcept { return _ctx->ctx._status; }
   /**
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
-   * @return Promise::Promise<Result<void, YieldType>> 结果。
+   * @return Promise::Promise<result_t<void, YieldType>> 结果。
    */
-  Promise::Promise<Result<void, YieldType>> next() const { return _next(_ctx); }
+  awacorn::promise<result_t<void, YieldType>> next() const {
+    return _next(_ctx);
+  }
   /**
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
    */
-  explicit AsyncGenerator(const decltype(_type::fn)& fn) {
+  explicit async_generator(const decltype(_type::fn)& fn) {
     _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
@@ -698,21 +771,21 @@ struct AsyncGenerator<void, YieldType> {
  * @tparam RetType 返回类型。
  */
 template <typename RetType>
-struct AsyncGenerator<RetType, void> {
+struct async_generator<RetType, void> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum Status {
+  typedef enum state_t {
     Pending = 0,   // 尚未运行
     Active = 1,    // 运行中
     Returned = 2,  // 已返回
     Awaiting = 3,  // await 中
     Throwed = 4    // 抛出错误
-  } Status;
+  } state_t;
   /**
    * @brief 生成器上下文。
    */
-  typedef struct Context : public _BaseContext {
+  typedef struct context : public basic_context {
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
      * 的值。若不在生成器内调用此函数则抛出 std::bad_function_call 错误。
@@ -722,49 +795,48 @@ struct AsyncGenerator<RetType, void> {
      * @return T Promise 的值。
      */
     template <typename T>
-    T await(const Promise::Promise<T>& value) {
-      return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
+    T await(const awacorn::promise<T>& value) {
+      return __await_impl<T, async_generator>::apply(this, value, &_status,
+                                                     &_result, &_failbit);
     }
-    Context(void (*fn)(void*), void* arg)
-        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
-    Context(const Context&) = delete;
-    friend struct AsyncGenerator;
-    template <typename T, typename GeneratorT>
-    friend struct _AwaitImpl;
+    context(void (*fn)(void*), void* arg)
+        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(const context&) = delete;
+    friend struct async_generator;
 
    private:
-    Promise::Unknown _result;
-    Status _status;
+    any _result;
+    state_t _status;
     bool _failbit;
-  } Context;
+  } context;
 
  private:
-  typedef _BaseGenerator<RetType(Context*), Context> _type;
-  static Promise::Promise<RetType> _next(const std::shared_ptr<_type>& _ctx) {
+  typedef basic_generator<RetType(context*), context> _type;
+  static awacorn::promise<RetType> _next(const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Awaiting || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._result
-            .template cast<Promise::Promise<Promise::Unknown>>()
-            .then([tmp](const Promise::Unknown& v) {
+        return _ctx->ctx._result.template cast<awacorn::promise<any>>()
+            .then([tmp](const any& v) {
               tmp->ctx._result = v;
               return _next(tmp);
             })
-            .error([tmp](const Promise::Unknown& err) {
+            .error([tmp](const any& err) {
               tmp->ctx._result = err;
               tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
-        return Promise::resolve(_ctx->ctx._result.template cast<RetType>());
+        return awacorn::make_resolve(
+            _ctx->ctx._result.template cast<RetType>());
       }
-      return Promise::reject<RetType>(_ctx->ctx._result);
+      return awacorn::make_reject<RetType>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return Promise::resolve(_ctx->ctx._result.template cast<RetType>());
+      return awacorn::make_resolve(_ctx->ctx._result.template cast<RetType>());
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject<RetType>(_ctx->ctx._result);
+      return awacorn::make_reject<RetType>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -772,15 +844,11 @@ struct AsyncGenerator<RetType, void> {
     try {
       self->ctx._result = self->fn(&self->ctx);
       self->ctx._status = Returned;
-    } catch (const Promise::Unknown& err) {
+    } catch (const any& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
-    } catch (...) {
-      throw std::invalid_argument(
-          "Forwarding unknown type exceptions are not supported; use "
-          "'Promise::Unknown' instead.");
     }
-    setcontext(&self->ctx._ctx);
+    self->ctx._switch_ctx();
   }
 
   std::shared_ptr<_type> _ctx;
@@ -789,22 +857,22 @@ struct AsyncGenerator<RetType, void> {
   /**
    * @brief 获得当前生成器的状态。
    *
-   * @return Status 生成器状态。
+   * @return state_t 生成器状态。
    */
-  Status status() const noexcept { return _ctx->ctx._status; }
+  state_t status() const noexcept { return _ctx->ctx._status; }
   /**
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
    * @return Promise::Promise<RetType> 结果。
    */
-  Promise::Promise<RetType> next() const { return _next(_ctx); }
+  awacorn::promise<RetType> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
    */
-  explicit AsyncGenerator(const decltype(_type::fn)& fn) {
+  explicit async_generator(const decltype(_type::fn)& fn) {
     _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
@@ -812,21 +880,21 @@ struct AsyncGenerator<RetType, void> {
  * @brief 不中断值也不返回值的异步生成器。
  */
 template <>
-struct AsyncGenerator<void, void> {
+struct async_generator<void, void> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum Status {
+  typedef enum state_t {
     Pending = 0,   // 尚未运行
     Active = 1,    // 运行中
     Returned = 2,  // 已返回
     Awaiting = 3,  // await 中
     Throwed = 4    // 抛出错误
-  } Status;
+  } state_t;
   /**
    * @brief 生成器上下文。
    */
-  typedef struct Context : public _BaseContext {
+  typedef struct context : public basic_context {
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
      * 的值。若不在生成器内调用此函数则抛出 std::bad_function_call 错误。
@@ -836,49 +904,46 @@ struct AsyncGenerator<void, void> {
      * @return T Promise 的值。
      */
     template <typename T>
-    T await(const Promise::Promise<T>& value) {
-      return _AwaitImpl<T, AsyncGenerator>::apply(this, value);
+    T await(const awacorn::promise<T>& value) {
+      return __await_impl<T, async_generator>::apply(this, value, &_status, &_result, &_failbit);
     }
-    Context(void (*fn)(void*), void* arg)
-        : _BaseContext(fn, arg), _status(Pending), _failbit(false) {}
-    Context(const Context&) = delete;
-    friend struct AsyncGenerator;
-    template <typename T, typename GeneratorT>
-    friend struct _AwaitImpl;
+    context(void (*fn)(void*), void* arg)
+        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(const context&) = delete;
+    friend struct async_generator;
 
    private:
-    Promise::Unknown _result;
-    Status _status;
+    any _result;
+    state_t _status;
     bool _failbit;
-  } Context;
+  } context;
 
  private:
-  typedef _BaseGenerator<void(Context*), Context> _type;
-  static Promise::Promise<void> _next(const std::shared_ptr<_type>& _ctx) {
+  typedef basic_generator<void(context*), context> _type;
+  static awacorn::promise<void> _next(const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Awaiting || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
       _ctx->ctx._switch_ctx();
       if (_ctx->ctx._status == Awaiting) {
         std::shared_ptr<_type> tmp = _ctx;
-        return _ctx->ctx._result
-            .template cast<Promise::Promise<Promise::Unknown>>()
-            .then([tmp](const Promise::Unknown& v) {
+        return _ctx->ctx._result.template cast<awacorn::promise<any>>()
+            .then([tmp](const any& v) {
               tmp->ctx._result = v;
               return _next(tmp);
             })
-            .error([tmp](const Promise::Unknown& err) {
+            .error([tmp](const any& err) {
               tmp->ctx._result = err;
               tmp->ctx._failbit = true;
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
-        return Promise::resolve();
+        return awacorn::make_resolve();
       }
-      return Promise::reject<void>(_ctx->ctx._result);
+      return awacorn::make_reject<void>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return Promise::resolve();
+      return awacorn::make_resolve();
     } else if (_ctx->ctx._status == Throwed) {
-      return Promise::reject<void>(_ctx->ctx._result);
+      return awacorn::make_reject<void>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -886,15 +951,11 @@ struct AsyncGenerator<void, void> {
     try {
       self->fn(&self->ctx);
       self->ctx._status = Returned;
-    } catch (const Promise::Unknown& err) {
+    } catch (const any& err) {
       self->ctx._result = err;
       self->ctx._status = Throwed;
-    } catch (...) {
-      throw std::invalid_argument(
-          "Forwarding unknown type exceptions are not supported; use "
-          "'Promise::Unknown' instead.");
     }
-    setcontext(&self->ctx._ctx);
+    self->ctx._switch_ctx();
   }
   std::shared_ptr<_type> _ctx;
 
@@ -902,24 +963,24 @@ struct AsyncGenerator<void, void> {
   /**
    * @brief 获得当前生成器的状态。
    *
-   * @return Status 生成器状态。
+   * @return state_t 生成器状态。
    */
-  Status status() const noexcept { return _ctx->ctx._status; }
+  state_t status() const noexcept { return _ctx->ctx._status; }
   /**
    * @brief 获得生成器返回的下一个值。若在生成器内调用此函数则抛出
    * std::bad_function_call 错误。
    *
    * @return Promise::Promise<void> 结果。
    */
-  Promise::Promise<void> next() const { return _next(_ctx); }
+  awacorn::promise<void> next() const { return _next(_ctx); }
   /**
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
    */
-  explicit AsyncGenerator(const decltype(_type::fn)& fn) {
+  explicit async_generator(const decltype(_type::fn)& fn) {
     _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
   }
 };
-}  // namespace Generator
+}  // namespace awacorn
 #endif
