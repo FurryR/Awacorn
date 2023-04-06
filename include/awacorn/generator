@@ -208,10 +208,10 @@ typedef struct basic_context {
   basic_context(void (*fn)(void*), void* arg)
       : _stack(std::vector<char>(STACK_SIZE)) {
 #if defined(USE_BOOST)
-    boost::context::callcc(std::allocator_arg,
+    _ctx = boost::context::callcc(std::allocator_arg,
                            boost::context::fixedsize_stack(STACK_SIZE),
                            [this, fn, arg](boost::context::continuation&& ctx) {
-                             _ctx = std::move(ctx);
+                             _ctx = ctx.resume();
                              fn(arg);
                              return std::move(_ctx);
                            });
