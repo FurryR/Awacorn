@@ -1,5 +1,5 @@
-#ifndef _GENERATOR_H
-#define _GENERATOR_H
+#ifndef _AWACORN_GENERATOR
+#define _AWACORN_GENERATOR
 #if !defined(USE_BOOST) && !defined(USE_UCONTEXT)
 #if __has_include(<boost/context/continuation.hpp>)
 #define USE_BOOST
@@ -205,28 +205,29 @@ constexpr size_t STACK_SIZE = 1024 * 128;  // 默认 128K 栈大小
  * @brief 生成器上下文基类。
  */
 typedef struct basic_context {
+#if defined(USE_BOOST)
+  basic_context(void (*fn)(void*), void* arg) {
+    _ctx = boost::context::callcc(
+        std::allocator_arg, boost::context::fixedsize_stack(STACK_SIZE),
+        [this, fn, arg](boost::context::continuation&& ctx) {
+          _ctx = ctx.resume();
+          fn(arg);
+          return std::move(_ctx);
+        });
+  }
+#elif defined(USE_UCONTEXT)
   basic_context(void (*fn)(void*), void* arg)
       : _stack(std::vector<char>(STACK_SIZE)) {
-#if defined(USE_BOOST)
-    _ctx = boost::context::callcc(std::allocator_arg,
-                           boost::context::fixedsize_stack(STACK_SIZE),
-                           [this, fn, arg](boost::context::continuation&& ctx) {
-                             _ctx = ctx.resume();
-                             fn(arg);
-                             return std::move(_ctx);
-                           });
-
-#elif defined(USE_BOOST)
     getcontext(&_ctx);
     _ctx.uc_stack.ss_sp = _stack.data();
     _ctx.uc_stack.ss_size = _stack.size();
     _ctx.uc_stack.ss_flags = 0;
     _ctx.uc_link = nullptr;
     makecontext(&_ctx, (void (*)(void))fn, 1, arg);
+  }
 #else
 #error Please define "USE_UCONTEXT" or "USE_BOOST".
 #endif
-  }
   basic_context(const basic_context&) = delete;
 
  protected:
@@ -291,10 +292,10 @@ typedef struct basic_context {
   boost::context::continuation _ctx;
 #elif defined(USE_UCONTEXT)
   ucontext_t _ctx;
+  std::vector<char> _stack;
 #else
 #error Please define "USE_UCONTEXT" or "USE_BOOST".
 #endif
-  std::vector<char> _stack;
 } basic_context;
 /**
  * @brief 生成器成员，用于实现智能生命周期。
@@ -905,7 +906,8 @@ struct async_generator<void, void> {
      */
     template <typename T>
     T await(const awacorn::promise<T>& value) {
-      return __await_impl<T, async_generator>::apply(this, value, &_status, &_result, &_failbit);
+      return __await_impl<T, async_generator>::apply(this, value, &_status,
+                                                     &_result, &_failbit);
     }
     context(void (*fn)(void*), void* arg)
         : basic_context(fn, arg), _status(Pending), _failbit(false) {}

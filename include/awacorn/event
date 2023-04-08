@@ -1,5 +1,5 @@
-#ifndef _EVENT_H
-#define _EVENT_H
+#ifndef _AWACORN_EVENT_
+#define _AWACORN_EVENT_
 /**
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2022.
