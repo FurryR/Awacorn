@@ -64,7 +64,7 @@ class function<Ret(Args...)> {
     if (*this) return (T*)ptr->template target<T>();
     return nullptr;
   }
-  inline Ret operator()(Args... args) {
+  inline Ret operator()(Args... args) const {
     if (*this) return (*ptr)(std::forward<Args>(args)...);
     throw std::bad_function_call();
   }
