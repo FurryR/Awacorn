@@ -17,7 +17,7 @@ struct basic_event {
   /**
    * @brief 事件类型。
    */
-  typedef awacorn::function<void(const T*)> fn_t;
+  typedef detail::function<void(const T*)> fn_t;
   /**
    * @brief 事件回调函数。
    */
