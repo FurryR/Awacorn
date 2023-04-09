@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 namespace awacorn {
+namespace detail {
 template <typename>
 class function {};
 template <typename Ret, typename... Args>
@@ -15,7 +16,7 @@ class function<Ret(Args...)> {
     virtual ~_m_base() = default;
   };
   template <typename T>
-  class _m_derived : _m_base {
+  class _m_derived : public _m_base {
     using value_type = typename std::decay<T>::type;
     value_type fn;
 
@@ -40,9 +41,10 @@ class function<Ret(Args...)> {
   std::unique_ptr<_m_base> ptr;
 
  public:
-  template <typename T>
-  function(T&& fn)
-      : ptr(new std::unique_ptr<_m_derived<T>>(new T(std::forward<T>(fn)))) {}
+  function() = default;
+  template <typename U>
+  function(U&& fn)
+      : ptr(std::unique_ptr<_m_base>(new _m_derived<U>(std::forward<U>(fn)))) {}
   function(const function&) = delete;
   function(function&& fn) : ptr(std::move(fn.ptr)) {}
   function& operator=(function&& fn) {
@@ -69,5 +71,6 @@ class function<Ret(Args...)> {
     throw std::bad_function_call();
   }
 };
+};  // namespace detail
 };  // namespace awacorn
 #endif

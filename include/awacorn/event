@@ -5,9 +5,10 @@
  * Copyright(c) 凌 2022.
  */
 #include <chrono>
-#include <functional>
 #include <list>
 #include <thread>
+
+#include "detail/function.hpp"
 
 namespace awacorn {
 template <typename T>
@@ -16,7 +17,7 @@ struct basic_event {
   /**
    * @brief 事件类型。
    */
-  typedef std::function<void(const T*)> fn_t;
+  typedef awacorn::function<void(const T*)> fn_t;
   /**
    * @brief 事件回调函数。
    */
@@ -26,30 +27,27 @@ struct basic_event {
    */
   std::chrono::high_resolution_clock::duration timeout;
 
+  template <typename U>
   explicit basic_event(
-      const fn_t& fn,
-      const std::chrono::high_resolution_clock::duration& timeout)
-      : fn(fn), timeout(timeout) {}
+      U&& fn, const std::chrono::high_resolution_clock::duration& timeout)
+      : fn(std::forward<U>(fn)), timeout(timeout) {}
   basic_event(const basic_event&) = delete;
-  basic_event(basic_event&& ev)
-      : fn(std::move(ev.fn)), timeout(std::move(ev.timeout)) {}
 };
 /**
  * @brief 事件的标识。
  */
-class event : protected basic_event<event> {
- public:
-  explicit event(const fn_t& fn,
+struct event : protected basic_event<event> {
+  template <typename U>
+  explicit event(U&& fn,
                  const std::chrono::high_resolution_clock::duration& timeout)
-      : basic_event<event>(fn, timeout) {}
+      : basic_event<event>(std::forward<U>(fn), timeout) {}
   event(const event&) = delete;
-  event(event&& ev) : basic_event<event>(std::move(ev)) {}
   friend class event_loop;
 };
 /**
  * @brief 循环事件的标识。
  */
-struct interval : protected basic_event<interval> {
+class interval : protected basic_event<interval> {
   /**
    * @brief 上一次的事件标识。若 Interval 还未执行，则 ev 为 nullptr。
    */
@@ -61,14 +59,13 @@ struct interval : protected basic_event<interval> {
   bool pending;
 
  public:
-  explicit interval(const fn_t& fn,
+  template <typename U>
+  explicit interval(U&& fn,
                     const std::chrono::high_resolution_clock::duration& timeout)
-      : basic_event<interval>(fn, timeout), ev(nullptr), pending(true) {}
+      : basic_event<interval>(std::forward<U>(fn), timeout),
+        ev(nullptr),
+        pending(true) {}
   interval(const interval&) = delete;
-  interval(interval&& intv)
-      : basic_event<interval>(std::move(intv)),
-        ev(std::move(intv.ev)),
-        pending(std::move(intv.pending)) {}
   friend class event_loop;
 };
 
@@ -83,7 +80,6 @@ class event_loop {
     for (std::list<interval>::iterator it = _intv.begin(); it != _intv.end();
          it++) {
       if (it->pending) {
-        interval::fn_t fn = it->fn;
         interval* ptr = &(*it);
         it->pending = false;
         it->ev = create(
@@ -152,11 +148,13 @@ class event_loop {
    * @param tm 指定事件触发的时间。
    * @return const Event* 事件的标识，可用于clear。
    */
-  template <typename Rep, typename Period>
-  const event* create(const event::fn_t& fn,
-                      const std::chrono::duration<Rep, Period>& tm) {
+  template <typename Rep, typename Period, typename U>
+  auto create(U&& fn, const std::chrono::duration<Rep, Period>& tm) ->
+      typename std::enable_if<
+          std::is_same<decltype(fn(std::declval<const event*>())), void>::value,
+          const event*>::type {
     return _create<event>(
-        &_event, fn,
+        &_event, std::forward<U>(fn),
         std::chrono::duration_cast<
             std::chrono::high_resolution_clock::duration>(tm));
   }
@@ -167,11 +165,14 @@ class event_loop {
    * @param tm 指定事件触发的时间。
    * @return const Interval* 事件的标识，可用于clear。
    */
-  template <typename Rep, typename Period>
-  const interval* create(const interval::fn_t& fn,
-                         const std::chrono::duration<Rep, Period>& tm) {
+  template <typename Rep, typename Period, typename U>
+  auto create(U&& fn, const std::chrono::duration<Rep, Period>& tm) ->
+      typename std::enable_if<
+          std::is_same<decltype(fn(std::declval<const interval*>())),
+                       void>::value,
+          const interval*>::type {
     return _create<interval>(
-        &_intv, fn,
+        &_intv, std::forward<U>(fn),
         std::chrono::duration_cast<
             std::chrono::high_resolution_clock::duration>(tm));
   }
@@ -200,8 +201,6 @@ class event_loop {
     }
   }
   event_loop() = default;
-  event_loop(event_loop&& ev)
-      : _event(std::move(ev._event)), _intv(std::move(ev._intv)) {}
   event_loop(const event_loop&) = delete;
 };
 };  // namespace awacorn

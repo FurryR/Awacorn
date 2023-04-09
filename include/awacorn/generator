@@ -18,12 +18,12 @@
 #include <ucontext.h>
 #endif
 
-#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <typeinfo>
 #include <vector>
 
+#include "detail/function.hpp"
 #include "promise"
 
 namespace awacorn {
@@ -74,42 +74,44 @@ struct result_t {
       const yield_type& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    *(yield_type*)tmp._val = value;
+    new ((yield_type*)tmp._val) yield_type(value);
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_yield(yield_type&& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    *(yield_type*)tmp._val = std::move(value);
+    new ((yield_type*)tmp._val) yield_type(std::move(value));
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_ret(const ret_type& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    *(ret_type*)tmp._val = value;
+    new ((ret_type*)tmp._val) ret_type(value);
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_ret(ret_type&& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    *(ret_type*)tmp._val = std::move(value);
+    new ((ret_type*)tmp._val) ret_type(std::move(value));
     return tmp;
   }
   result_t() : _type(Null) {}
   result_t(const result_t<ret_type, yield_type>& val) : _type(val._type) {
     if (val._type == Return) {
-      *(ret_type*)_val = *(const ret_type*)val._val;
+      new ((ret_type*)_val) ret_type(*(const ret_type*)val._val);
     } else if (val._type == Yield) {
-      *(yield_type*)_val = *(const yield_type*)val._val;
+      new ((yield_type*)_val) yield_type(*(const yield_type*)val._val);
     }
   }
-  result_t(result_t<RetType, YieldType>&& val)
-      : _type(val._type), _val(val._val) {
-    val._type = Null;
+  result_t(result_t<RetType, YieldType>&& val) : _type(val._type) {
+    std::swap(_type, val._type);
+    std::swap(_val, val._val);
   }
   result_t& operator=(const result_t& rhs) { return *new (this) result_t(rhs); }
   result_t& operator=(result_t&& rhs) {
-    return *new (this) result_t(std::move(rhs));
+    std::swap(_type, rhs._type);
+    std::swap(_val, rhs._val);
+    return *this;
   }
   ~result_t() {
     if (_type == Return) {
@@ -306,10 +308,11 @@ typedef struct basic_context {
  */
 template <typename Fn, typename context>
 struct basic_generator {
-  std::function<Fn> fn;
+  detail::function<Fn> fn;
   context ctx;
-  explicit basic_generator(const std::function<Fn>& fn, void (*run_fn)(void*))
-      : fn(fn), ctx(run_fn, this) {}
+  template <typename U>
+  explicit basic_generator(U&& fn, void (*run_fn)(void*))
+      : fn(std::forward<U>(fn)), ctx(run_fn, this) {}
   explicit basic_generator(const basic_generator& v) = delete;
 };
 /**
@@ -409,8 +412,10 @@ struct generator {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit generator(const decltype(_type::fn)& fn) {
-    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
+  template <typename U>
+  explicit generator(U&& fn) {
+    _ctx =
+        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
   }
 };
 /**
@@ -504,8 +509,10 @@ struct generator<void, YieldType> {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit generator(const decltype(_type::fn)& fn) {
-    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
+  template <typename U>
+  explicit generator(U&& fn) {
+    _ctx =
+        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
   }
 };
 /**
@@ -585,19 +592,19 @@ struct async_generator {
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
-        return awacorn::make_resolve(
+        return awacorn::resolve(
             result_t<RetType, YieldType>::generate_yield(
                 _ctx->ctx._result.template cast<YieldType>()));
       } else if (_ctx->ctx._status == Returned) {
-        return awacorn::make_resolve(result_t<RetType, YieldType>::generate_ret(
+        return awacorn::resolve(result_t<RetType, YieldType>::generate_ret(
             _ctx->ctx._result.template cast<RetType>()));
       }
-      return awacorn::make_reject(_ctx->ctx._result);
+      return awacorn::reject(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return awacorn::make_resolve(result_t<RetType, YieldType>::generate_ret(
+      return awacorn::resolve(result_t<RetType, YieldType>::generate_ret(
           _ctx->ctx._result.template cast<RetType>()));
     } else if (_ctx->ctx._status == Throwed) {
-      return awacorn::make_reject(_ctx->ctx._result);
+      return awacorn::reject(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -635,8 +642,10 @@ struct async_generator {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit async_generator(const decltype(_type::fn)& fn) {
-    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
+  template <typename U>
+  explicit async_generator(U&& fn) {
+    _ctx =
+        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
   }
 };
 /**
@@ -715,16 +724,16 @@ struct async_generator<void, YieldType> {
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
-        return awacorn::make_resolve(result_t<void, YieldType>::generate_yield(
+        return awacorn::resolve(result_t<void, YieldType>::generate_yield(
             _ctx->ctx._result.template cast<YieldType>()));
       } else if (_ctx->ctx._status == Returned) {
-        return awacorn::make_resolve(result_t<void, YieldType>::generate_ret());
+        return awacorn::resolve(result_t<void, YieldType>::generate_ret());
       }
-      return awacorn::make_reject<result_t<void, YieldType>>(_ctx->ctx._result);
+      return awacorn::reject<result_t<void, YieldType>>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return awacorn::make_resolve(result_t<void, YieldType>::generate_ret());
+      return awacorn::resolve(result_t<void, YieldType>::generate_ret());
     } else if (_ctx->ctx._status == Throwed) {
-      return awacorn::make_reject<result_t<void, YieldType>>(_ctx->ctx._result);
+      return awacorn::reject<result_t<void, YieldType>>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -762,8 +771,10 @@ struct async_generator<void, YieldType> {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit async_generator(const decltype(_type::fn)& fn) {
-    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
+  template <typename U>
+  explicit async_generator(U&& fn) {
+    _ctx =
+        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
   }
 };
 /**
@@ -830,14 +841,14 @@ struct async_generator<RetType, void> {
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
-        return awacorn::make_resolve(
+        return awacorn::resolve(
             _ctx->ctx._result.template cast<RetType>());
       }
-      return awacorn::make_reject<RetType>(_ctx->ctx._result);
+      return awacorn::reject<RetType>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return awacorn::make_resolve(_ctx->ctx._result.template cast<RetType>());
+      return awacorn::resolve(_ctx->ctx._result.template cast<RetType>());
     } else if (_ctx->ctx._status == Throwed) {
-      return awacorn::make_reject<RetType>(_ctx->ctx._result);
+      return awacorn::reject<RetType>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -873,8 +884,10 @@ struct async_generator<RetType, void> {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit async_generator(const decltype(_type::fn)& fn) {
-    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
+  template <typename U>
+  explicit async_generator(U&& fn) {
+    _ctx =
+        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
   }
 };
 /**
@@ -939,13 +952,13 @@ struct async_generator<void, void> {
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
-        return awacorn::make_resolve();
+        return awacorn::resolve();
       }
-      return awacorn::make_reject<void>(_ctx->ctx._result);
+      return awacorn::reject<void>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
-      return awacorn::make_resolve();
+      return awacorn::resolve();
     } else if (_ctx->ctx._status == Throwed) {
-      return awacorn::make_reject<void>(_ctx->ctx._result);
+      return awacorn::reject<void>(_ctx->ctx._result);
     }
     throw std::bad_function_call();
   }
@@ -980,8 +993,10 @@ struct async_generator<void, void> {
    *
    * @param fn 生成器内部的函数。
    */
-  explicit async_generator(const decltype(_type::fn)& fn) {
-    _ctx = std::make_shared<_type>(fn, (void (*)(void*))run_fn);
+  template <typename U>
+  explicit async_generator(U&& fn) {
+    _ctx =
+        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
   }
 };
 }  // namespace awacorn

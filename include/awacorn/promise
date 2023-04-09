@@ -8,9 +8,10 @@
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2022.
  */
-#include <functional>
 #include <memory>
 #include <tuple>
+
+#include "detail/function.hpp"
 namespace awacorn {
 #if __cplusplus >= 201703L
 using bad_any_cast = std::bad_any_cast;
@@ -21,6 +22,16 @@ class any {
   any() = default;
   template <typename T>
   any(T&& val) : data(std::forward<T>(val)) {}
+  any(const any& v) : data(val.data) {}
+  any(any&& v) : data(std::move(val.data)) {}
+  any& operator=(const any& v) {
+    data = v.data;
+    return *this;
+  }
+  any& operator=(any&& v) {
+    data = std::move(v.data);
+    return *this;
+  }
   inline const std::type_info& type() const { return data.type(); }
   inline bool has_value() const noexcept { return data.has_value(); }
   inline void reset() noexcept { data.reset(); }
@@ -75,7 +86,13 @@ class any {
                 std::forward<T>(val)))) {}
   any(const any& val) : ptr(val.ptr ? val.ptr->clone() : nullptr) {}
   any(any&& val) : ptr(std::move(val.ptr)) {}
-  any& operator=(const any& rhs) { return *new (this) any(rhs); }
+  any& operator=(const any& rhs) {
+    if (rhs.ptr)
+      ptr = rhs.ptr->clone();
+    else
+      ptr = nullptr;
+    return *this;
+  }
   any& operator=(any&& rhs) { return (ptr = std::move(rhs.ptr)), *this; }
   const std::type_info& type() const {
     if (ptr) return ptr->type();
@@ -113,17 +130,19 @@ struct basic_promise {
    * @brief promise 的状态。
    */
   enum state_t {
-    Pending = 0,   // 等待中。
-    Resolved = 1,  // 已完成。
-    Rejected = 2   // 已失败。
+    Pending = 0,    // 等待中。
+    Fulfilled = 1,  // 已完成。
+    Rejected = 2    // 已失败。
   };
 
  protected:
-  // Promise<T>.then(std::function<Promise<Ret>(ArgType)>) sub-implementation
-  // pm.then(std::function<Promise<Ret>(ArgType)>) sub-implementation
+  // Promise<T>.then(detail::function<Promise<Ret>(ArgType)>)
+  // sub-implementation pm.then(detail::function<Promise<Ret>(ArgType)>)
+  // sub-implementation
   template <typename Ret, typename ArgType,
-            template <typename T> class PromiseT, typename _promise, typename U>
+            template <typename T> class PromiseT, typename _promise>
   struct __then_sub_impl {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->then([t, fn](const ArgType& val) -> void {
@@ -139,10 +158,11 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.then(std::function<Promise<void>(ArgType)>) sub-implementation
+  // pm.then(detail::function<Promise<void>(ArgType)>) sub-implementation
   template <typename ArgType, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __then_sub_impl<void, ArgType, PromiseT, _promise, U> {
+            typename _promise>
+  struct __then_sub_impl<void, ArgType, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm,
                                 const U&& fn) {
       PromiseT<void> t;
@@ -159,11 +179,12 @@ struct basic_promise {
       return t;
     }
   };
-  // Promise<void>.then(std::function<Promise<Ret>()>) sub-implementation
-  // pm.then(std::function<Promise<Ret>()>) sub-implementation
+  // Promise<void>.then(detail::function<Promise<Ret>()>) sub-implementation
+  // pm.then(detail::function<Promise<Ret>()>) sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __then_sub_impl<Ret, void, PromiseT, _promise, U> {
+            typename _promise>
+  struct __then_sub_impl<Ret, void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->then([t, fn]() -> void {
@@ -179,9 +200,10 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.then(std::function<Promise<void>()>) sub-implementation
-  template <template <typename T> class PromiseT, typename _promise, typename U>
-  struct __then_sub_impl<void, void, PromiseT, _promise, U> {
+  // pm.then(detail::function<Promise<void>()>) sub-implementation
+  template <template <typename T> class PromiseT, typename _promise>
+  struct __then_sub_impl<void, void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->then([t, fn]() -> void {
@@ -199,10 +221,11 @@ struct basic_promise {
   };
 
   // Promise<T>.then implementation
-  // pm.then(std::function<Ret(ArgType)>) implementation
+  // pm.then(detail::function<Ret(ArgType)>) implementation
   template <typename Ret, typename ArgType,
-            template <typename T> class PromiseT, typename _promise, typename U>
+            template <typename T> class PromiseT, typename _promise>
   struct __then_impl {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->then([t, fn](const ArgType& val) -> void {
@@ -216,19 +239,21 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.then(std::function<Promise<Ret>(ArgType)>) implementation
+  // pm.then(detail::function<Promise<Ret>(ArgType)>) implementation
   template <typename Ret, typename ArgType,
-            template <typename T> class PromiseT, typename _promise, typename U>
-  struct __then_impl<PromiseT<Ret>, ArgType, PromiseT, _promise, U> {
+            template <typename T> class PromiseT, typename _promise>
+  struct __then_impl<PromiseT<Ret>, ArgType, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
-      return __then_sub_impl<Ret, ArgType, PromiseT, _promise, U>::apply(
+      return __then_sub_impl<Ret, ArgType, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
-  // pm.then(std::function<void(ArgType)>) implementation
+  // pm.then(detail::function<void(ArgType)>) implementation
   template <typename ArgType, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __then_impl<void, ArgType, PromiseT, _promise, U> {
+            typename _promise>
+  struct __then_impl<void, ArgType, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->then([t, fn](const ArgType& val) -> void {
@@ -245,10 +270,11 @@ struct basic_promise {
   };
 
   // Promise<void>.then implementation
-  // pm.then(std::function<Ret()>) implementation
+  // pm.then(detail::function<Ret()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __then_impl<Ret, void, PromiseT, _promise, U> {
+            typename _promise>
+  struct __then_impl<Ret, void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->then([t, fn]() -> void {
@@ -262,18 +288,20 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.then(std::function<Promise<Ret>()>) implementation
+  // pm.then(detail::function<Promise<Ret>()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __then_impl<PromiseT<Ret>, void, PromiseT, _promise, U> {
+            typename _promise>
+  struct __then_impl<PromiseT<Ret>, void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
-      return __then_sub_impl<Ret, void, PromiseT, _promise, U>::apply(
+      return __then_sub_impl<Ret, void, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
-  // pm.then(std::function<void()>) implementation
-  template <template <typename T> class PromiseT, typename _promise, typename U>
-  struct __then_impl<void, void, PromiseT, _promise, U> {
+  // pm.then(detail::function<void()>) implementation
+  template <template <typename T> class PromiseT, typename _promise>
+  struct __then_impl<void, void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->then([t, fn]() -> void {
@@ -289,13 +317,14 @@ struct basic_promise {
     }
   };
 
-  // Promise<T>.error(std::function<Promise<Ret>(any)>)
+  // Promise<T>.error(detail::function<Promise<Ret>(any)>)
   // sub-implementation
 
-  // pm.error(std::function<Promise<Ret>(any)>) sub-implementation
+  // pm.error(detail::function<Promise<Ret>(any)>) sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
+            typename _promise>
   struct __error_sub_impl {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->error([t, fn](const any& val) -> void {
@@ -310,9 +339,10 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.error(std::function<Promise<void>(any)>) sub-implementation
-  template <template <typename T> class PromiseT, typename _promise, typename U>
-  struct __error_sub_impl<void, PromiseT, _promise, U> {
+  // pm.error(detail::function<Promise<void>(any)>) sub-implementation
+  template <template <typename T> class PromiseT, typename _promise>
+  struct __error_sub_impl<void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->error([t, fn](const any& val) -> void {
@@ -329,10 +359,11 @@ struct basic_promise {
   };
 
   // Promise<T>.error implementation
-  // pm.error(std::function<Ret(any)>) implementation
+  // pm.error(detail::function<Ret(any)>) implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
+            typename _promise>
   struct __error_impl {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->error([t, fn](const any& err) -> void {
@@ -345,18 +376,20 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.error(std::function<Promise<Ret>(any)>) implementation
+  // pm.error(detail::function<Promise<Ret>(any)>) implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __error_impl<PromiseT<Ret>, PromiseT, _promise, U> {
+            typename _promise>
+  struct __error_impl<PromiseT<Ret>, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
-      return __error_sub_impl<Ret, PromiseT, _promise, U>::apply(
+      return __error_sub_impl<Ret, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
-  // pm.error(std::function<void(any)>) implementation
-  template <template <typename T> class PromiseT, typename _promise, typename U>
-  struct __error_impl<void, PromiseT, _promise, U> {
+  // pm.error(detail::function<void(any)>) implementation
+  template <template <typename T> class PromiseT, typename _promise>
+  struct __error_impl<void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->error([t, fn](const any& err) -> void {
@@ -372,11 +405,12 @@ struct basic_promise {
     }
   };
 
-  // Promise<T>.finally(std::function<Promise<Ret>()>) sub-implementation
-  // pm.finally(std::function<Promise<Ret>()>) sub-implementation
+  // Promise<T>.finally(detail::function<Promise<Ret>()>) sub-implementation
+  // pm.finally(detail::function<Promise<Ret>()>) sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
+            typename _promise>
   struct __finally_sub_impl {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->finally([t, fn]() -> void {
@@ -391,9 +425,10 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.finally(std::function<Promise<void>()>) sub-implementation
-  template <template <typename T> class PromiseT, typename _promise, typename U>
-  struct __finally_sub_impl<void, PromiseT, _promise, U> {
+  // pm.finally(detail::function<Promise<void>()>) sub-implementation
+  template <template <typename T> class PromiseT, typename _promise>
+  struct __finally_sub_impl<void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->finally([t, fn]() -> void {
@@ -410,10 +445,11 @@ struct basic_promise {
   };
 
   // Promise<T>.finally implementation
-  // pm.finally(std::function<Ret()>) implementation
+  // pm.finally(detail::function<Ret()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
+            typename _promise>
   struct __finally_impl {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       pm->finally([t, fn]() -> void {
@@ -426,18 +462,20 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.finally(std::function<Promise<Ret>()>) implementation
+  // pm.finally(detail::function<Promise<Ret>()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
-            typename _promise, typename U>
-  struct __finally_impl<PromiseT<Ret>, PromiseT, _promise, U> {
+            typename _promise>
+  struct __finally_impl<PromiseT<Ret>, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
-      return __finally_sub_impl<Ret, PromiseT, _promise, U>::apply(
+      return __finally_sub_impl<Ret, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
-  // pm.finally(std::function<void()>) implementation
-  template <template <typename T> class PromiseT, typename _promise, typename U>
-  struct __finally_impl<void, PromiseT, _promise, U> {
+  // pm.finally(detail::function<void()>) implementation
+  template <template <typename T> class PromiseT, typename _promise>
+  struct __finally_impl<void, PromiseT, _promise> {
+    template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       pm->finally([t, fn]() -> void {
@@ -473,12 +511,12 @@ struct promise : public basic_promise {
 
  private:
   struct _promise {
-    using type = std::function<void(const value_type&)>;
-    using error_type = std::function<void(const any&)>;
-    using finally_type = std::function<void()>;
+    using type = detail::function<void(const value_type&)>;
+    using error_type = detail::function<void(const any&)>;
+    using finally_type = detail::function<void()>;
     void then(type&& fn) {
       _then = std::move(fn);
-      if (_status == Resolved) {
+      if (_status == Fulfilled) {
         _then(*(value_type*)_val);
       }
     }
@@ -496,16 +534,16 @@ struct promise : public basic_promise {
     }
     void resolve(const value_type& val) {
       if (_status == Pending) {
-        _status = Resolved;
-        (*(value_type*)_val) = val;
+        _status = Fulfilled;
+        new ((value_type*)_val) value_type(val);
         if (_then) _then((*(value_type*)_val));
         if (_finally) _finally();
       }
     }
     void resolve(value_type&& val) {
       if (_status == Pending) {
-        _status = Resolved;
-        (*(value_type*)_val) = std::move(val);
+        _status = Fulfilled;
+        new ((value_type*)_val) value_type(std::move(val));
         if (_then) _then((*(value_type*)_val));
         if (_finally) _finally();
       }
@@ -513,7 +551,7 @@ struct promise : public basic_promise {
     void reject(const any& err) {
       if (_status == Pending) {
         _status = Rejected;
-        *(any*)_val = err;
+        new ((any*)_val) any(err);
         if (_error) _error(*(any*)_val);
         if (_finally) _finally();
       }
@@ -521,7 +559,7 @@ struct promise : public basic_promise {
     void reject(any&& err) {
       if (_status == Pending) {
         _status = Rejected;
-        *(any*)_val = std::move(err);
+        new ((any*)_val) any(std::move(err));
         if (_error) _error(*(any*)_val);
         if (_finally) _finally();
       }
@@ -530,7 +568,7 @@ struct promise : public basic_promise {
     _promise() : _status(Pending) {}
     _promise(const _promise& val) = delete;
     ~_promise() {
-      if (_status == Resolved) {
+      if (_status == Fulfilled) {
         ((value_type*)_val)->~value_type();
       } else if (_status == Rejected) {
         ((any*)_val)->~any();
@@ -563,7 +601,7 @@ struct promise : public basic_promise {
       decltype(std::declval<U>()(std::declval<value_type>())), promise>::type>
   then(U&& fn) const {
     using Ret = decltype(std::declval<U>()(std::declval<value_type>()));
-    return __then_impl<Ret, value_type, promise, _promise, U>::apply(
+    return __then_impl<Ret, value_type, promise, _promise>::apply(
         pm, std::forward<U>(fn));
   }
   /**
@@ -579,8 +617,7 @@ struct promise : public basic_promise {
       decltype(std::declval<U>()(std::declval<any>())), promise>::type>
   error(U&& fn) const {
     using Ret = decltype(std::declval<U>()(std::declval<any>()));
-    return __error_impl<Ret, promise, _promise, U>::apply(pm,
-                                                          std::forward<U>(fn));
+    return __error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
   }
   /**
    * @brief 设定在 promise
@@ -595,8 +632,8 @@ struct promise : public basic_promise {
   promise<typename remove_promise<decltype(std::declval<U>()()), promise>::type>
   finally(U&& fn) const {
     using Ret = decltype(std::declval<U>()());
-    return __finally_impl<Ret, promise, _promise, U>::apply(
-        pm, std::forward<U>(fn));
+    return __finally_impl<Ret, promise, _promise>::apply(pm,
+                                                         std::forward<U>(fn));
   }
   /**
    * @brief 完成此Promise。
@@ -626,12 +663,12 @@ struct promise : public basic_promise {
 template <>
 class promise<void> : public basic_promise {
   struct _promise {
-    using type = std::function<void()>;
-    using error_type = std::function<void(const any&)>;
-    using finally_type = std::function<void()>;
+    using type = detail::function<void()>;
+    using error_type = detail::function<void(const any&)>;
+    using finally_type = detail::function<void()>;
     void then(type&& fn) {
       _then = std::move(fn);
-      if (_status == Resolved) {
+      if (_status == Fulfilled) {
         _then();
       }
     }
@@ -649,7 +686,7 @@ class promise<void> : public basic_promise {
     }
     void resolve() {
       if (_status == Pending) {
-        _status = Resolved;
+        _status = Fulfilled;
         if (_then) _then();
         if (_finally) _finally();
       }
@@ -697,7 +734,7 @@ class promise<void> : public basic_promise {
   promise<typename remove_promise<decltype(std::declval<U>()()), promise>::type>
   then(U&& fn) const {
     using Ret = decltype(std::declval<U>()());
-    return __then_impl<Ret, void, promise, _promise, U>::apply(
+    return __then_impl<Ret, void, promise, _promise>::apply(
         pm, std::forward<U>(fn));
   }
   /**
@@ -713,8 +750,7 @@ class promise<void> : public basic_promise {
       decltype(std::declval<U>()(std::declval<any>())), promise>::type>
   error(U&& fn) const {
     using Ret = decltype(std::declval<U>()(std::declval<any>()));
-    return __error_impl<Ret, promise, _promise, U>::apply(pm,
-                                                          std::forward<U>(fn));
+    return __error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
   }
   /**
    * @brief 设定在 promise
@@ -729,8 +765,8 @@ class promise<void> : public basic_promise {
   promise<typename remove_promise<decltype(std::declval<U>()()), promise>::type>
   finally(U&& fn) const {
     using Ret = decltype(std::declval<U>()());
-    return __finally_impl<Ret, promise, _promise, U>::apply(
-        pm, std::forward<U>(fn));
+    return __finally_impl<Ret, promise, _promise>::apply(pm,
+                                                         std::forward<U>(fn));
   }
   /**
    * @brief 完成此Promise。
@@ -753,7 +789,7 @@ class promise<void> : public basic_promise {
   state_t status() const noexcept { return pm->status(); }
   explicit promise() : pm(new _promise()) {}
 };
-namespace gather {
+namespace detail {
 template <typename ResultType, typename Tuple, size_t TOTAL, size_t N>
 struct _promise_all {
   static void apply(const Tuple& t, const std::shared_ptr<ResultType>& result,
@@ -857,6 +893,8 @@ struct _promise_allSettled<Tuple, TOTAL, 0> {
     });
   }
 };
+};  // namespace detail
+namespace gather {
 /**
  * @brief 等待所有 promise 完成后才 resolve。当有 promise 失败，立刻
  * reject。返回一个获得所有结果的 Promise。
@@ -872,9 +910,10 @@ static promise<std::tuple<Args...>> all(const promise<Args>&... arg) {
   std::shared_ptr<ResultType> result =
       std::shared_ptr<ResultType>(new ResultType());
   std::shared_ptr<size_t> done_count = std::shared_ptr<size_t>(new size_t(0));
-  _promise_all<ResultType, std::tuple<promise<Args>...>, sizeof...(Args),
-               sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...),
-                                           result, done_count, pm);
+  detail::_promise_all<
+      ResultType, std::tuple<promise<Args>...>, sizeof...(Args),
+      sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...), result,
+                                  done_count, pm);
   return pm;
 }
 /**
@@ -891,9 +930,10 @@ static promise<void> any(const promise<Args>&... arg) {
   using ResultType = std::tuple<Args...>;
   promise<void> pm;
   std::shared_ptr<size_t> fail_count = std::shared_ptr<size_t>(new size_t(0));
-  _promise_any<ResultType, std::tuple<promise<Args>...>, sizeof...(Args),
-               sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...),
-                                           fail_count, pm);
+  detail::_promise_any<
+      ResultType, std::tuple<promise<Args>...>, sizeof...(Args),
+      sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...), fail_count,
+                                  pm);
   return pm;
 }
 /**
@@ -909,8 +949,9 @@ static promise<void> any(const promise<Args>&... arg) {
 template <typename... Args>
 static promise<void> race(const promise<Args>&... arg) {
   promise<void> pm;
-  _promise_race<std::tuple<promise<Args>...>, sizeof...(Args),
-                sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...), pm);
+  detail::_promise_race<std::tuple<promise<Args>...>, sizeof...(Args),
+                        sizeof...(Args) -
+                            1>::apply(std::forward_as_tuple(arg...), pm);
   return pm;
 }
 /**
@@ -926,26 +967,27 @@ template <typename... Args>
 static promise<void> all_settled(const promise<Args>&... arg) {
   promise<void> pm;
   std::shared_ptr<size_t> done_count = std::shared_ptr<size_t>(new size_t(0));
-  _promise_allSettled<std::tuple<promise<Args>...>, sizeof...(Args),
-                      sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...),
-                                                  done_count, pm);
+  detail::_promise_allSettled<std::tuple<promise<Args>...>, sizeof...(Args),
+                              sizeof...(Args) -
+                                  1>::apply(std::forward_as_tuple(arg...),
+                                            done_count, pm);
   return pm;
 }
 }  // namespace gather
 /**
- * @brief 返回一个已经 Resolved 的 Promise。
+ * @brief 返回一个已经 Fulfilled 的 Promise。
  *
  * @tparam Value promise 类型
  * @param val 可选，Promise的值。
- * @return promise<Value> 已经 Resolved 的 promise
+ * @return promise<Value> 已经 Fulfilled 的 promise
  */
 template <typename Value>
-promise<Value> make_resolve(const Value& val) {
+promise<Value> resolve(const Value& val) {
   promise<Value> tmp;
   tmp.resolve(val);
   return tmp;
 }
-promise<void> make_resolve() {
+promise<void> resolve() {
   promise<void> tmp;
   tmp.resolve();
   return tmp;
@@ -957,7 +999,7 @@ promise<void> make_resolve() {
  * @return promise<Value> promise 本身
  */
 template <typename Value>
-promise<Value> make_resolve(const promise<Value>& val) {
+promise<Value> resolve(const promise<Value>& val) {
   return val;
 }
 /**
@@ -968,7 +1010,7 @@ promise<Value> make_resolve(const promise<Value>& val) {
  * @return promise<Value> 已经 Rejected 的 promise
  */
 template <typename Value>
-promise<Value> make_reject(const awacorn::any& err) {
+promise<Value> reject(const awacorn::any& err) {
   promise<Value> tmp;
   tmp.reject(err);
   return tmp;

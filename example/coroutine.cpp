@@ -11,7 +11,7 @@ awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
         std::string input;
         std::cout << str << std::flush;
         std::getline(std::cin, input);
-        pm.resolve(input);
+        pm.resolve(std::move(input));
       },
       std::chrono::nanoseconds(0));
   return pm;
