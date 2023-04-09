@@ -1,7 +1,7 @@
 #include <iostream>
 
-#include "awacorn/event"
-#include "awacorn/promise"
+#include "awacorn/event.hpp"
+#include "awacorn/promise.hpp"
 using namespace awacorn;
 template <typename Rep, typename Period>
 promise<std::nullptr_t> sleep(event_loop* ev,

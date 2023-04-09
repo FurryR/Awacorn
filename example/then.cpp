@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "awacorn/promise"
+#include "awacorn/promise.hpp"
 int main() {
   awacorn::resolve(1)
       .then([](int i) {

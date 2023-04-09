@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "detail/function.hpp"
-#include "promise"
+#include "promise.hpp"
 
 namespace awacorn {
 

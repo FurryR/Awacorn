@@ -21,7 +21,7 @@
 
 ```cpp
 #include <iostream>
-#include "awacorn/event"
+#include "awacorn/event.hpp"
 int main() {
   using namespace awacorn;
   using namespace std;
@@ -45,7 +45,7 @@ int main() {
 
 ```cpp
 #include <iostream>
-#include "awacorn/event"
+#include "awacorn/event.hpp"
 int main() {
   using namespace awacorn;
   using namespace std;
@@ -71,7 +71,7 @@ int main() {
 
 ```cpp
 #include <iostream>
-#include "awacorn/event"
+#include "awacorn/event.hpp"
 int main() {
   using namespace awacorn;
   using namespace std;
@@ -95,7 +95,7 @@ int main() {
 
 ```cpp
 #include <iostream>
-#include "awacorn/event"
+#include "awacorn/event.hpp"
 int main() {
   using namespace awacorn;
   using namespace std;
