@@ -6,8 +6,8 @@
 awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
                                           const std::string& str) {
   awacorn::promise<std::string> pm;
-  ev->create(
-      [str, pm](const awacorn::event*) -> void {
+  ev->event(
+      [str, pm]() -> void {
         std::string input;
         std::cout << str << std::flush;
         std::getline(std::cin, input);

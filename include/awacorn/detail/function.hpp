@@ -1,15 +1,24 @@
 #ifndef _AWACORN_FUNCTION_
 #define _AWACORN_FUNCTION_
-#include <functional>
+#if __cplusplus >= 201101L
+/**
+ * Project Awacorn 基于 MIT 协议开源。
+ * Copyright(c) 凌 2022.
+ */
 #include <memory>
+#include <stdexcept>
 namespace awacorn {
 namespace detail {
+struct bad_function_call : public std::exception {
+  virtual ~bad_function_call() noexcept {}
+  const char* what() const noexcept { return "bad function call"; }
+};
 template <typename>
-class function {};
+class function;
 template <typename Ret, typename... Args>
 class function<Ret(Args...)> {
   struct _m_base {
-    virtual Ret operator()(Args...) const = 0;
+    virtual Ret operator()(Args...) = 0;
     virtual const std::type_info& target_type() const noexcept = 0;
     virtual void* target() noexcept = 0;
     virtual const void* target() const noexcept = 0;
@@ -34,7 +43,7 @@ class function<Ret(Args...)> {
       if (typeid(T) != typeid(value_type)) return nullptr;
       return &fn;
     }
-    Ret operator()(Args... args) const override {
+    Ret operator()(Args... args) override {
       return fn(std::forward<Args>(args)...);
     }
   };
@@ -68,9 +77,10 @@ class function<Ret(Args...)> {
   }
   inline Ret operator()(Args... args) const {
     if (*this) return (*ptr)(std::forward<Args>(args)...);
-    throw std::bad_function_call();
+    throw bad_function_call();
   }
 };
 };  // namespace detail
 };  // namespace awacorn
+#endif
 #endif

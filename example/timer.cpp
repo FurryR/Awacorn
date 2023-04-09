@@ -5,9 +5,9 @@
 using namespace awacorn;
 template <typename Rep, typename Period>
 promise<std::nullptr_t> sleep(event_loop* ev,
-                    const std::chrono::duration<Rep, Period>& dur) {
+                              const std::chrono::duration<Rep, Period>& dur) {
   promise<std::nullptr_t> pm;
-  ev->create([pm](const event*) { pm.resolve(nullptr); }, dur);
+  ev->event([pm]() { pm.resolve(nullptr); }, dur);
   return pm;
 }
 int main() {

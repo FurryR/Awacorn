@@ -6,7 +6,7 @@
 #if __cplusplus >= 201101L
 /**
  * Project Awacorn 基于 MIT 协议开源。
- * Copyright(c) 凌 2022.
+ * Copyright(c) 凌 2023.
  */
 #include <memory>
 #include <tuple>
@@ -22,8 +22,8 @@ class any {
   any() = default;
   template <typename T>
   any(T&& val) : data(std::forward<T>(val)) {}
-  any(const any& v) : data(val.data) {}
-  any(any&& v) : data(std::move(val.data)) {}
+  any(const any& v) : data(v.data) {}
+  any(any&& v) : data(std::move(v.data)) {}
   any& operator=(const any& v) {
     data = v.data;
     return *this;
@@ -535,7 +535,7 @@ struct promise : public basic_promise {
     void resolve(const value_type& val) {
       if (_status == Pending) {
         _status = Fulfilled;
-        new ((value_type*)_val) value_type(val);
+        new (_val) value_type(val);
         if (_then) _then((*(value_type*)_val));
         if (_finally) _finally();
       }
@@ -543,7 +543,7 @@ struct promise : public basic_promise {
     void resolve(value_type&& val) {
       if (_status == Pending) {
         _status = Fulfilled;
-        new ((value_type*)_val) value_type(std::move(val));
+        new (_val) value_type(std::move(val));
         if (_then) _then((*(value_type*)_val));
         if (_finally) _finally();
       }
@@ -551,7 +551,7 @@ struct promise : public basic_promise {
     void reject(const any& err) {
       if (_status == Pending) {
         _status = Rejected;
-        new ((any*)_val) any(err);
+        new (_val) any(err);
         if (_error) _error(*(any*)_val);
         if (_finally) _finally();
       }
@@ -559,7 +559,7 @@ struct promise : public basic_promise {
     void reject(any&& err) {
       if (_status == Pending) {
         _status = Rejected;
-        new ((any*)_val) any(std::move(err));
+        new (_val) any(std::move(err));
         if (_error) _error(*(any*)_val);
         if (_finally) _finally();
       }

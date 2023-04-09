@@ -1,17 +1,22 @@
 #ifndef _AWACORN_GENERATOR
 #define _AWACORN_GENERATOR
-#if !defined(USE_BOOST) && !defined(USE_UCONTEXT)
+#if __cplusplus >= 201101L
+/**
+ * Project Awacorn 基于 MIT 协议开源。
+ * Copyright(c) 凌 2023.
+ */
+#if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)
 #if __has_include(<boost/context/continuation.hpp>)
-#define USE_BOOST
+#define AWACORN_USE_BOOST
 #elif __has_include(<ucontext.h>)
-#define USE_UCONTEXT
+#define AWACORN_USE_UCONTEXT
 #else
 #error Neither <boost/context/continuation.hpp> nor <ucontext.h> is found.
 #endif
 #endif
-#if defined(USE_BOOST)
+#if defined(AWACORN_USE_BOOST)
 #include <boost/context/continuation.hpp>
-#elif defined(USE_UCONTEXT)
+#elif defined(AWACORN_USE_UCONTEXT)
 #ifdef __APPLE__
 #define _XOPEN_SOURCE
 #endif
@@ -74,40 +79,49 @@ struct result_t {
       const yield_type& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    new ((yield_type*)tmp._val) yield_type(value);
+    new (tmp._val) yield_type(value);
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_yield(yield_type&& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    new ((yield_type*)tmp._val) yield_type(std::move(value));
+    new (tmp._val) yield_type(std::move(value));
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_ret(const ret_type& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    new ((ret_type*)tmp._val) ret_type(value);
+    new (tmp._val) ret_type(value);
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_ret(ret_type&& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    new ((ret_type*)tmp._val) ret_type(std::move(value));
+    new (tmp._val) ret_type(std::move(value));
     return tmp;
   }
   result_t() : _type(Null) {}
   result_t(const result_t<ret_type, yield_type>& val) : _type(val._type) {
     if (val._type == Return) {
-      new ((ret_type*)_val) ret_type(*(const ret_type*)val._val);
+      new (_val) ret_type(*(const ret_type*)val._val);
     } else if (val._type == Yield) {
-      new ((yield_type*)_val) yield_type(*(const yield_type*)val._val);
+      new (_val) yield_type(*(const yield_type*)val._val);
     }
   }
   result_t(result_t<RetType, YieldType>&& val) : _type(val._type) {
     std::swap(_type, val._type);
     std::swap(_val, val._val);
   }
-  result_t& operator=(const result_t& rhs) { return *new (this) result_t(rhs); }
+  result_t& operator=(const result_t& val) {
+    ~result_t();
+    _type = val._type;
+    if (val._type == Return) {
+      new (_val) ret_type(*(const ret_type*)val._val);
+    } else if (val._type == Yield) {
+      new (_val) yield_type(*(const yield_type*)val._val);
+    }
+    return *this;
+  }
   result_t& operator=(result_t&& rhs) {
     std::swap(_type, rhs._type);
     std::swap(_val, rhs._val);
@@ -141,11 +155,11 @@ struct result_t<void, YieldType> {
   /**
    * @brief 结果的类型。
    */
-  typedef enum state_t {
+  enum state_t {
     Null = 0,    // 空
     Return = 1,  // 返回类型
     Yield = 2    // 中断类型
-  } state_t;
+  };
   /**
    * @brief 获得中断值。类型不正确则抛出 std::bad_cast 错误。
    *
@@ -206,29 +220,32 @@ constexpr size_t STACK_SIZE = 1024 * 128;  // 默认 128K 栈大小
 /**
  * @brief 生成器上下文基类。
  */
-typedef struct basic_context {
-#if defined(USE_BOOST)
-  basic_context(void (*fn)(void*), void* arg) {
-    _ctx = boost::context::callcc(
-        std::allocator_arg, boost::context::fixedsize_stack(STACK_SIZE),
-        [this, fn, arg](boost::context::continuation&& ctx) {
-          _ctx = ctx.resume();
-          fn(arg);
-          return std::move(_ctx);
-        });
-  }
-#elif defined(USE_UCONTEXT)
-  basic_context(void (*fn)(void*), void* arg)
-      : _stack(std::vector<char>(STACK_SIZE)) {
+struct basic_context {
+#if defined(AWACORN_USE_BOOST)
+  basic_context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+      : _ctx(boost::context::callcc(
+            std::allocator_arg, boost::context::fixedsize_stack(stack_size),
+            [this, fn, arg](boost::context::continuation&& ctx) {
+              _ctx = ctx.resume();
+              fn(arg);
+              return std::move(_ctx);
+            })) {}
+#elif defined(AWACORN_USE_UCONTEXT)
+  basic_context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+      : _stack(nullptr, [](char* ptr) {
+          if (ptr) delete[] ptr;
+        }) {
     getcontext(&_ctx);
-    _ctx.uc_stack.ss_sp = _stack.data();
-    _ctx.uc_stack.ss_size = _stack.size();
+    if (!stack_size) stack_size = 128 * 1024;  // default stack size
+    _stack.reset(new char[stack_size]);
+    _ctx.uc_stack.ss_sp = _stack.get();
+    _ctx.uc_stack.ss_size = stack_size;
     _ctx.uc_stack.ss_flags = 0;
     _ctx.uc_link = nullptr;
     makecontext(&_ctx, (void (*)(void))fn, 1, arg);
   }
 #else
-#error Please define "USE_UCONTEXT" or "USE_BOOST".
+#error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
   basic_context(const basic_context&) = delete;
 
@@ -279,26 +296,26 @@ typedef struct basic_context {
     }
   };
   void _switch_ctx() {
-#if defined(USE_BOOST)
+#if defined(AWACORN_USE_BOOST)
     _ctx = _ctx.resume();
-#elif defined(USE_UCONTEXT)
+#elif defined(AWACORN_USE_UCONTEXT)
     ucontext_t orig = _ctx;
     swapcontext(&_ctx, &orig);
 #else
-#error Please define "USE_UCONTEXT" or "USE_BOOST".
+#error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
   }
 
  private:
-#if defined(USE_BOOST)
+#if defined(AWACORN_USE_BOOST)
   boost::context::continuation _ctx;
-#elif defined(USE_UCONTEXT)
+#elif defined(AWACORN_USE_UCONTEXT)
   ucontext_t _ctx;
-  std::vector<char> _stack;
+  std::unique_ptr<char, void (*)(char*)> _stack;
 #else
-#error Please define "USE_UCONTEXT" or "USE_BOOST".
+#error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
-} basic_context;
+};
 /**
  * @brief 生成器成员，用于实现智能生命周期。
  *
@@ -311,8 +328,8 @@ struct basic_generator {
   detail::function<Fn> fn;
   context ctx;
   template <typename U>
-  explicit basic_generator(U&& fn, void (*run_fn)(void*))
-      : fn(std::forward<U>(fn)), ctx(run_fn, this) {}
+  explicit basic_generator(U&& fn, void (*run_fn)(void*), size_t stack_size = 0)
+      : fn(std::forward<U>(fn)), ctx(run_fn, this, stack_size) {}
   explicit basic_generator(const basic_generator& v) = delete;
 };
 /**
@@ -326,17 +343,17 @@ struct generator {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum state_t {
+  enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Throwed = 4    // 抛出错误
-  } state_t;
+  };
   /**
    * @brief 生成器上下文。
    */
-  typedef struct context : public basic_context {
+  struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -346,8 +363,8 @@ struct generator {
     void yield(const YieldType& value) {
       __yield_impl<RetType, YieldType, generator>::apply(this, value);
     }
-    context(void (*fn)(void*), void* arg)
-        : basic_context(fn, arg), _status(Pending) {}
+    context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+        : basic_context(fn, arg, stack_size), _status(Pending) {}
     context(const context&) = delete;
     friend struct generator;
     friend struct __yield_impl<RetType, YieldType, generator>;
@@ -355,10 +372,10 @@ struct generator {
    private:
     state_t _status;
     any _result;
-  } context;
+  };
 
  private:
-  typedef basic_generator<RetType(context*), context> _type;
+  using _type = basic_generator<RetType(context*), context>;
   static result_t<RetType, YieldType> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending) {
@@ -411,11 +428,12 @@ struct generator {
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
+   * @param stack_size 栈大小。
    */
   template <typename U>
-  explicit generator(U&& fn) {
-    _ctx =
-        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
+  explicit generator(U&& fn, size_t stack_size = 0) {
+    _ctx = std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn,
+                                   stack_size);
   }
 };
 /**
@@ -428,17 +446,17 @@ struct generator<void, YieldType> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum state_t {
+  enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Throwed = 4    // 抛出错误
-  } state_t;
+  };
   /**
    * @brief 生成器上下文。
    */
-  typedef struct context : public basic_context {
+  struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -448,8 +466,8 @@ struct generator<void, YieldType> {
     void yield(const YieldType& value) {
       __yield_impl<void, YieldType, generator>::apply(this, value);
     }
-    context(void (*fn)(void*), void* arg)
-        : basic_context(fn, arg), _status(Pending) {}
+    context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+        : basic_context(fn, arg, stack_size), _status(Pending) {}
     context(const context&) = delete;
     friend struct generator;
     friend struct __yield_impl<void, YieldType, generator>;
@@ -457,10 +475,10 @@ struct generator<void, YieldType> {
    private:
     state_t _status;
     any _result;
-  } context;
+  };
 
  private:
-  typedef basic_generator<void(context*), context> _type;
+  using _type = basic_generator<void(context*), context>;
   static result_t<void, YieldType> _next(const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Yielded || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
@@ -508,11 +526,12 @@ struct generator<void, YieldType> {
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
+   * @param stack_size 栈大小。
    */
   template <typename U>
-  explicit generator(U&& fn) {
-    _ctx =
-        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
+  explicit generator(U&& fn, size_t stack_size = 0) {
+    _ctx = std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn,
+                                   stack_size);
   }
 };
 /**
@@ -526,18 +545,18 @@ struct async_generator {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum state_t {
+  enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Awaiting = 4,  // await 中
     Throwed = 5    // 抛出错误
-  } state_t;
+  };
   /**
    * @brief 生成器上下文。
    */
-  typedef struct context : public basic_context {
+  struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -560,8 +579,10 @@ struct async_generator {
       return __await_impl<T, async_generator>::apply(this, value, &_status,
                                                      &_result, &_failbit);
     }
-    context(void (*fn)(void*), void* arg)
-        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+        : basic_context(fn, arg, stack_size),
+          _status(Pending),
+          _failbit(false) {}
     context(const context&) = delete;
     friend struct async_generator;
 
@@ -569,10 +590,10 @@ struct async_generator {
     any _result;
     state_t _status;
     bool _failbit;
-  } context;
+  };
 
  private:
-  typedef basic_generator<RetType(context*), context> _type;
+  using _type = basic_generator<RetType(context*), context>;
   static awacorn::promise<result_t<RetType, YieldType>> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->_ctx._status == Awaiting || _ctx->ctx._status == Yielded ||
@@ -592,9 +613,8 @@ struct async_generator {
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Yielded) {
-        return awacorn::resolve(
-            result_t<RetType, YieldType>::generate_yield(
-                _ctx->ctx._result.template cast<YieldType>()));
+        return awacorn::resolve(result_t<RetType, YieldType>::generate_yield(
+            _ctx->ctx._result.template cast<YieldType>()));
       } else if (_ctx->ctx._status == Returned) {
         return awacorn::resolve(result_t<RetType, YieldType>::generate_ret(
             _ctx->ctx._result.template cast<RetType>()));
@@ -641,11 +661,12 @@ struct async_generator {
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
+   * @param stack_size 栈大小。
    */
   template <typename U>
-  explicit async_generator(U&& fn) {
-    _ctx =
-        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
+  explicit async_generator(U&& fn, size_t stack_size = 0) {
+    _ctx = std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn,
+                                   stack_size);
   }
 };
 /**
@@ -658,18 +679,18 @@ struct async_generator<void, YieldType> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum state_t {
+  enum state_t {
     Pending = 0,   // 尚未运行
     Yielded = 1,   // 已中断
     Active = 2,    // 运行中
     Returned = 3,  // 已返回
     Awaiting = 4,  // await 中
     Throwed = 5    // 抛出错误
-  } state_t;
+  };
   /**
    * @brief 生成器上下文。
    */
-  typedef struct context : public basic_context {
+  struct context : public basic_context {
     /**
      * @brief 中断当前的生成器。若不在生成器内调用此函数则抛出
      * std::bad_function_call 错误。
@@ -692,8 +713,10 @@ struct async_generator<void, YieldType> {
       return __await_impl<T, async_generator>::apply(this, value, &_status,
                                                      &_result, &_failbit);
     }
-    context(void (*fn)(void*), void* arg)
-        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+        : basic_context(fn, arg, stack_size),
+          _status(Pending),
+          _failbit(false) {}
     context(const context&) = delete;
     friend struct async_generator;
 
@@ -701,10 +724,10 @@ struct async_generator<void, YieldType> {
     any _result;
     state_t _status;
     bool _failbit;
-  } context;
+  };
 
  private:
-  typedef basic_generator<void(context*), context> _type;
+  using _type = basic_generator<void(context*), context>;
   static awacorn::promise<result_t<void, YieldType>> _next(
       const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Awaiting || _ctx->ctx._status == Yielded ||
@@ -770,11 +793,12 @@ struct async_generator<void, YieldType> {
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
+   * @param stack_size 栈大小。
    */
   template <typename U>
-  explicit async_generator(U&& fn) {
-    _ctx =
-        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
+  explicit async_generator(U&& fn, size_t stack_size = 0) {
+    _ctx = std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn,
+                                   stack_size);
   }
 };
 /**
@@ -787,17 +811,17 @@ struct async_generator<RetType, void> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum state_t {
+  enum state_t {
     Pending = 0,   // 尚未运行
     Active = 1,    // 运行中
     Returned = 2,  // 已返回
     Awaiting = 3,  // await 中
     Throwed = 4    // 抛出错误
-  } state_t;
+  };
   /**
    * @brief 生成器上下文。
    */
-  typedef struct context : public basic_context {
+  struct context : public basic_context {
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
      * 的值。若不在生成器内调用此函数则抛出 std::bad_function_call 错误。
@@ -811,8 +835,10 @@ struct async_generator<RetType, void> {
       return __await_impl<T, async_generator>::apply(this, value, &_status,
                                                      &_result, &_failbit);
     }
-    context(void (*fn)(void*), void* arg)
-        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+        : basic_context(fn, arg, stack_size),
+          _status(Pending),
+          _failbit(false) {}
     context(const context&) = delete;
     friend struct async_generator;
 
@@ -820,10 +846,10 @@ struct async_generator<RetType, void> {
     any _result;
     state_t _status;
     bool _failbit;
-  } context;
+  };
 
  private:
-  typedef basic_generator<RetType(context*), context> _type;
+  using _type = basic_generator<RetType(context*), context>;
   static awacorn::promise<RetType> _next(const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Awaiting || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
@@ -841,8 +867,7 @@ struct async_generator<RetType, void> {
               return _next(tmp);
             });
       } else if (_ctx->ctx._status == Returned) {
-        return awacorn::resolve(
-            _ctx->ctx._result.template cast<RetType>());
+        return awacorn::resolve(_ctx->ctx._result.template cast<RetType>());
       }
       return awacorn::reject<RetType>(_ctx->ctx._result);
     } else if (_ctx->ctx._status == Returned) {
@@ -883,11 +908,12 @@ struct async_generator<RetType, void> {
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
+   * @param stack_size 栈大小。
    */
   template <typename U>
-  explicit async_generator(U&& fn) {
-    _ctx =
-        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
+  explicit async_generator(U&& fn, size_t stack_size = 0) {
+    _ctx = std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn,
+                                   stack_size);
   }
 };
 /**
@@ -898,17 +924,17 @@ struct async_generator<void, void> {
   /**
    * @brief 生成器的状态。
    */
-  typedef enum state_t {
+  enum state_t {
     Pending = 0,   // 尚未运行
     Active = 1,    // 运行中
     Returned = 2,  // 已返回
     Awaiting = 3,  // await 中
     Throwed = 4    // 抛出错误
-  } state_t;
+  };
   /**
    * @brief 生成器上下文。
    */
-  typedef struct context : public basic_context {
+  struct context : public basic_context {
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
      * 的值。若不在生成器内调用此函数则抛出 std::bad_function_call 错误。
@@ -922,8 +948,10 @@ struct async_generator<void, void> {
       return __await_impl<T, async_generator>::apply(this, value, &_status,
                                                      &_result, &_failbit);
     }
-    context(void (*fn)(void*), void* arg)
-        : basic_context(fn, arg), _status(Pending), _failbit(false) {}
+    context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+        : basic_context(fn, arg, stack_size),
+          _status(Pending),
+          _failbit(false) {}
     context(const context&) = delete;
     friend struct async_generator;
 
@@ -931,10 +959,10 @@ struct async_generator<void, void> {
     any _result;
     state_t _status;
     bool _failbit;
-  } context;
+  };
 
  private:
-  typedef basic_generator<void(context*), context> _type;
+  using _type = basic_generator<void(context*), context>;
   static awacorn::promise<void> _next(const std::shared_ptr<_type>& _ctx) {
     if (_ctx->ctx._status == Awaiting || _ctx->ctx._status == Pending) {
       _ctx->ctx._status = Active;
@@ -992,12 +1020,14 @@ struct async_generator<void, void> {
    * @brief 根据函数构造生成器。
    *
    * @param fn 生成器内部的函数。
+   * @param stack_size 栈大小。
    */
   template <typename U>
-  explicit async_generator(U&& fn) {
-    _ctx =
-        std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn);
+  explicit async_generator(U&& fn, size_t stack_size = 0) {
+    _ctx = std::make_shared<_type>(std::forward<U>(fn), (void (*)(void*))run_fn,
+                                   stack_size);
   }
 };
 }  // namespace awacorn
+#endif
 #endif

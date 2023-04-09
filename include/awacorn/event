@@ -1,8 +1,9 @@
 #ifndef _AWACORN_EVENT_
 #define _AWACORN_EVENT_
+#if __cplusplus >= 201101L
 /**
  * Project Awacorn 基于 MIT 协议开源。
- * Copyright(c) 凌 2022.
+ * Copyright(c) 凌 2023.
  */
 #include <chrono>
 #include <list>
@@ -11,96 +12,61 @@
 #include "detail/function.hpp"
 
 namespace awacorn {
-template <typename T>
-struct basic_event {
- protected:
+class event_loop;
+class task_t {
   /**
-   * @brief 事件类型。
+   * @brief 事件的标识。
    */
-  typedef detail::function<void(const T*)> fn_t;
-  /**
-   * @brief 事件回调函数。
-   */
-  fn_t fn;
-  /**
-   * @brief 对于 Interval 是循环间隔，对于 Event 无效。
-   */
-  std::chrono::high_resolution_clock::duration timeout;
+  class event {
+    /**
+     * @brief 事件类型。
+     */
+    using fn_t = detail::function<void()>;
+    /**
+     * @brief 事件回调函数。
+     */
+    fn_t fn;
+    /**
+     * @brief 对于 Interval 是循环间隔，对于 Event 无效。
+     */
+    std::chrono::high_resolution_clock::duration timeout;
+    /**
+     * @brief 如果 keep 设置为 true，那么将会保留这个事件。
+     */
+    bool keep;
 
-  template <typename U>
-  explicit basic_event(
-      U&& fn, const std::chrono::high_resolution_clock::duration& timeout)
-      : fn(std::forward<U>(fn)), timeout(timeout) {}
-  basic_event(const basic_event&) = delete;
-};
-/**
- * @brief 事件的标识。
- */
-struct event : protected basic_event<event> {
-  template <typename U>
-  explicit event(U&& fn,
-                 const std::chrono::high_resolution_clock::duration& timeout)
-      : basic_event<event>(std::forward<U>(fn), timeout) {}
-  event(const event&) = delete;
-  friend class event_loop;
-};
-/**
- * @brief 循环事件的标识。
- */
-class interval : protected basic_event<interval> {
-  /**
-   * @brief 上一次的事件标识。若 Interval 还未执行，则 ev 为 nullptr。
-   */
-  const event* ev;
-  /**
-   * @brief 若 pending 为 false，则代表此 Interval 已经加入事件循环，否则此
-   * Interval 仍未被加入事件循环。
-   */
-  bool pending;
+   public:
+    template <typename U>
+    explicit event(U&& fn,
+                   const std::chrono::high_resolution_clock::duration& timeout,
+                   bool keep)
+        : fn(std::forward<U>(fn)), timeout(timeout), keep(keep) {}
+    event(const event&) = delete;
+    event(event&& v) : fn(std::move(v.fn)), timeout(v.timeout), keep(v.keep) {}
+    event& operator=(event&& rhs) {
+      fn = std::move(rhs.fn);
+      timeout = rhs.timeout;
+      keep = rhs.keep;
+      return *this;
+    }
+    friend class awacorn::event_loop;
+  };
+  std::list<event>::const_iterator it;
+  task_t(std::list<event>::const_iterator it) : it(it) {}
 
  public:
-  template <typename U>
-  explicit interval(U&& fn,
-                    const std::chrono::high_resolution_clock::duration& timeout)
-      : basic_event<interval>(std::forward<U>(fn), timeout),
-        ev(nullptr),
-        pending(true) {}
-  interval(const interval&) = delete;
   friend class event_loop;
 };
-
 /**
  * @brief 事件循环。
  */
 class event_loop {
-  std::list<event> _event;
-  std::list<interval> _intv;
-  void _inst_intv() {
-    if (_intv.empty()) return;
-    for (std::list<interval>::iterator it = _intv.begin(); it != _intv.end();
-         it++) {
-      if (it->pending) {
-        interval* ptr = &(*it);
-        it->pending = false;
-        it->ev = create(
-            [ptr, this](const event*) -> void {
-              for (std::list<interval>::iterator it = _intv.begin();
-                   it != this->_intv.end(); it++) {
-                if (&(*it) == ptr) {
-                  it->pending = true;
-                  it->fn(ptr);
-                  break;
-                }
-              }
-            },
-            it->timeout);
-      }
-    }
-  }
+  std::list<task_t::event> _event;
+  std::list<task_t::event>::iterator _current;
   void _execute() {
-    std::list<event>::iterator min = _event.end();
-    for (std::list<event>::iterator it = _event.begin(); it != _event.end();
-         it++) {
+    std::list<task_t::event>::iterator min = _event.end();
+    for (std::list<task_t::event>::iterator it = _event.begin();
+         it != _event.end(); it++) {
       if (min == _event.end() || it->timeout < min->timeout) min = it;
     }
     if (min != _event.cend()) {
@@ -108,100 +74,95 @@ class event_loop {
       if (duration != std::chrono::high_resolution_clock::duration(0)) {
         std::this_thread::sleep_for(duration);
       }
-      for (std::list<event>::iterator it = _event.begin(); it != _event.end();
-           it++)
+      for (std::list<task_t::event>::iterator it = _event.begin();
+           it != _event.end(); it++)
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
                           : std::chrono::high_resolution_clock::duration(0);
       std::chrono::high_resolution_clock::time_point st =
           std::chrono::high_resolution_clock::now();
-      min->fn(&(*min)), _event.erase(min);
+      _current = min;
+      min->fn();
+      if (!min->keep) _event.erase(min);
+      _current = _event.end();
       duration = std::chrono::high_resolution_clock::now() - st;
-      for (std::list<event>::iterator it = _event.begin(); it != _event.end();
-           it++)
+      for (std::list<task_t::event>::iterator it = _event.begin();
+           it != _event.end(); it++)
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
                           : std::chrono::high_resolution_clock::duration(0);
     }
   }
-  template <typename T>
-  static void _clear(const T* task, std::list<T>* list) noexcept {
-    for (typename std::list<T>::const_iterator it = list->cbegin();
-         it != list->cend(); it++) {
-      if (&(*it) == task) {
-        list->erase(it);
-        return;
-      }
-    }
-  }
-  template <typename T, typename... Args>
-  static const T* _create(std::list<T>* list, Args&&... args) {
+  template <typename... Args>
+  static task_t _create(std::list<task_t::event>* list, Args&&... args) {
     return list->emplace_back(std::forward<Args>(args)...),
-           (const T*)&list->back();
+           task_t(--list->cend());
   }
 
  public:
+  /**
+   * @brief 获取当前的事件。
+   *
+   * @return task_t
+   * 当前正在执行的事件。若没有，返回 nullptr。
+   */
+  task_t current() const noexcept { return task_t(_current); }
   /**
    * @brief 创建定时事件。
    *
    * @param fn 事件函数。
    * @param tm 指定事件触发的时间。
-   * @return const Event* 事件的标识，可用于clear。
+   * @return task_t 事件的标识，可用于clear。
    */
   template <typename Rep, typename Period, typename U>
-  auto create(U&& fn, const std::chrono::duration<Rep, Period>& tm) ->
-      typename std::enable_if<
-          std::is_same<decltype(fn(std::declval<const event*>())), void>::value,
-          const event*>::type {
-    return _create<event>(
-        &_event, std::forward<U>(fn),
-        std::chrono::duration_cast<
-            std::chrono::high_resolution_clock::duration>(tm));
+  task_t event(U&& fn, const std::chrono::duration<Rep, Period>& tm) {
+    return _create(&_event, std::forward<U>(fn),
+                   std::chrono::duration_cast<
+                       std::chrono::high_resolution_clock::duration>(tm),
+                   false);
   }
   /**
    * @brief 创建循环事件。
    *
    * @param fn 事件函数。
    * @param tm 指定事件触发的时间。
-   * @return const Interval* 事件的标识，可用于clear。
+   * @return task_t 事件的标识，可用于clear。
    */
   template <typename Rep, typename Period, typename U>
-  auto create(U&& fn, const std::chrono::duration<Rep, Period>& tm) ->
-      typename std::enable_if<
-          std::is_same<decltype(fn(std::declval<const interval*>())),
-                       void>::value,
-          const interval*>::type {
-    return _create<interval>(
-        &_intv, std::forward<U>(fn),
+  task_t interval(U&& fn, const std::chrono::duration<Rep, Period>& tm) {
+    return _create(
+        &_event,
+        [this, fn, tm]() {
+          fn();
+          _current->timeout = tm;
+        },
         std::chrono::duration_cast<
-            std::chrono::high_resolution_clock::duration>(tm));
+            std::chrono::high_resolution_clock::duration>(tm),
+        true);
   }
   /**
    * @brief 删除即将发生的事件。
    *
    * @param task 事件标识。
    */
-  void clear(const event* task) noexcept { _clear<event>(task, &_event); }
-  /**
-   * @brief 删除循环事件。已经被放入队列中的事件无法取消。
-   *
-   * @param task 循环事件标识。
-   */
-  void clear(const interval* task) noexcept {
-    if (task->ev && (!task->pending)) clear(task->ev);
-    _clear<interval>(task, &_intv);
+  void clear(task_t task) {
+    if (task.it == _event.cend()) return;
+    if (task.it == _current)
+      _current->keep = false;
+    else
+      _event.erase(task.it);
   }
   /**
    * @brief 运行事件循环。此函数将在所有事件都运行完成之后返回。
    */
   void start() {
-    while (1) {
-      _inst_intv(), _execute();
-      if (_event.empty() && _intv.empty()) break;
-    }
+    do {
+      _execute();
+    } while (!_event.empty());
   }
   event_loop() = default;
   event_loop(const event_loop&) = delete;
 };
 };  // namespace awacorn
+#endif
 #endif
