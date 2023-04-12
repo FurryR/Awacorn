@@ -982,9 +982,9 @@ static promise<void> all_settled(const promise<Args>&... arg) {
  * @return promise<Value> 已经 Fulfilled 的 promise
  */
 template <typename Value>
-promise<Value> resolve(const Value& val) {
+promise<Value> resolve(Value&& val) {
   promise<Value> tmp;
-  tmp.resolve(val);
+  tmp.resolve(std::forward<Value>(val));
   return tmp;
 }
 promise<void> resolve() {
@@ -1002,6 +1002,10 @@ template <typename Value>
 promise<Value> resolve(const promise<Value>& val) {
   return val;
 }
+template <typename Value>
+promise<Value> resolve(promise<Value>&& val) {
+  return val;
+}
 /**
  * @brief 返回一个 Rejected 的 Promise。
  *
@@ -1013,6 +1017,12 @@ template <typename Value>
 promise<Value> reject(const awacorn::any& err) {
   promise<Value> tmp;
   tmp.reject(err);
+  return tmp;
+}
+template <typename Value>
+promise<Value> reject(awacorn::any&& err) {
+  promise<Value> tmp;
+  tmp.reject(std::move(err));
   return tmp;
 }
 };  // namespace awacorn

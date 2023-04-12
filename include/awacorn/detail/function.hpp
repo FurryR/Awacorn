@@ -6,13 +6,9 @@
  * Copyright(c) 凌 2022.
  */
 #include <memory>
-#include <stdexcept>
+#include <functional>
 namespace awacorn {
 namespace detail {
-struct bad_function_call : public std::exception {
-  virtual ~bad_function_call() noexcept {}
-  const char* what() const noexcept { return "bad function call"; }
-};
 template <typename>
 class function;
 template <typename Ret, typename... Args>
@@ -77,7 +73,7 @@ class function<Ret(Args...)> {
   }
   inline Ret operator()(Args... args) const {
     if (*this) return (*ptr)(std::forward<Args>(args)...);
-    throw bad_function_call();
+    throw std::bad_function_call();
   }
 };
 };  // namespace detail
