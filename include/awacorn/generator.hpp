@@ -32,7 +32,10 @@
 #include "promise.hpp"
 
 namespace awacorn {
-
+struct cancel_error : public std::exception {
+  ~cancel_error() noexcept override {}
+  const char* what() const noexcept override { return "generator cancelled"; }
+};
 /**
  * @brief 表示返回或中断值。
  *
@@ -221,9 +224,10 @@ constexpr size_t STACK_SIZE = 1024 * 128;  // 默认 128K 栈大小
  * @brief 生成器上下文基类。
  */
 struct basic_context {
+  protected:
 #if defined(AWACORN_USE_BOOST)
   basic_context(void (*fn)(void*), void* arg, size_t stack_size = 0)
-      : _ctx(boost::context::callcc(
+      : _cancelling(false), _ctx(boost::context::callcc(
             std::allocator_arg, boost::context::fixedsize_stack(stack_size),
             [this, fn, arg](boost::context::continuation&& ctx) {
               _ctx = ctx.resume();
@@ -232,7 +236,7 @@ struct basic_context {
             })) {}
 #elif defined(AWACORN_USE_UCONTEXT)
   basic_context(void (*fn)(void*), void* arg, size_t stack_size = 0)
-      : _stack(nullptr, [](char* ptr) {
+      : _cancelling(false), _stack(nullptr, [](char* ptr) {
           if (ptr) delete[] ptr;
         }) {
     getcontext(&_ctx);
@@ -249,28 +253,35 @@ struct basic_context {
 #endif
   basic_context(const basic_context&) = delete;
 
- protected:
   // ctx->yield(T) implementation
   template <typename RetType, typename YieldType, typename Gen>
   struct __yield_impl {
     static void apply(basic_context* ctx, const YieldType& value,
                       typename Gen::state_t* status,
-                      result_t<RetType, YieldType>* result) {
+                      result_t<RetType, YieldType>* result, bool* cancelling) {
       if (*status != Gen::Active) throw std::bad_function_call();
       *status = Gen::Yielded;
       *result = value;
       ctx->_switch_ctx();
+      if (*cancelling) {
+        *cancelling = false;
+	throw cancel_error();
+      }
     }
   };
   // ctx->await(Promise::Promise<T>) implementation
   template <typename T, typename Gen>
   struct __await_impl {
     static T apply(basic_context* ctx, const awacorn::promise<T>& value,
-                   typename Gen::state_t* status, any* result, bool* failbit) {
+                   typename Gen::state_t* status, any* result, bool* failbit, bool* cancelling) {
       if (*status != Gen::Active) throw std::bad_function_call();
       *status = Gen::Awaiting;
       *result = value.then([](const T& v) { return any(v); });
       ctx->_switch_ctx();
+      if (*cancelling) {
+	*cancelling = false;
+	throw cancel_error();
+      }
       if (*failbit) {
         *failbit = false;
         throw *result;
@@ -284,11 +295,15 @@ struct basic_context {
     static void apply(typename Gen::context* ctx,
                       const awacorn::promise<void>& value,
                       typename Gen::state_t* status, any* result,
-                      bool* failbit) {
+                      bool* failbit, bool* cancelling) {
       if (*status != Gen::Active) throw std::bad_function_call();
       *status = Gen::Awaiting;
       *result = value.then([]() { return any(); });
       ctx->_switch_ctx();
+      if (*cancelling) {
+	*cancelling = false;
+	throw cancel_error();
+      }
       if (*failbit) {
         *failbit = false;
         throw *result;
@@ -305,7 +320,7 @@ struct basic_context {
 #error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
   }
-
+  bool _cancelling;
  private:
 #if defined(AWACORN_USE_BOOST)
   boost::context::continuation _ctx;
@@ -325,11 +340,11 @@ struct basic_context {
  */
 template <typename Fn, typename context>
 struct basic_generator {
-  detail::function<Fn> fn;
   context ctx;
+  detail::function<Fn> fn;
   template <typename U>
   explicit basic_generator(U&& fn, void (*run_fn)(void*), size_t stack_size = 0)
-      : fn(std::forward<U>(fn)), ctx(run_fn, this, stack_size) {}
+      : ctx(run_fn, this, stack_size), fn(std::forward<U>(fn)) {}
   explicit basic_generator(const basic_generator& v) = delete;
 };
 /**
@@ -361,7 +376,7 @@ struct generator {
      * @param value 中断值。
      */
     void yield(const YieldType& value) {
-      __yield_impl<RetType, YieldType, generator>::apply(this, value);
+      __yield_impl<RetType, YieldType, generator>::apply(this, value, &_cancelling);
     }
     context(void (*fn)(void*), void* arg, size_t stack_size = 0)
         : basic_context(fn, arg, stack_size), _status(Pending) {}
