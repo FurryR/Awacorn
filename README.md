@@ -18,7 +18,7 @@ int main() {
 }
 ```
 
-:eyes: 查看 [完整示例](./example/coroutine.cpp)
+:eyes: 查看 [完整示例](./example/hello-world.cpp)
 
 ## 目录
 
@@ -61,7 +61,7 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 | 选项                    | 描述                                                              | 要求                       |
 | ----------------------- | ----------------------------------------------------------------- | -------------------------- |
-| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序，这将导致额外的编译时间。          | N/A                        |
+| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。          | N/A                        |
 | -DAWACORN_USE_BOOST     | :construction: 使用 `boost::context::continuation` 作为协程实现。 | `boost_context`            |
 | -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                   | `ucontext.h` (libucontext) |
 
