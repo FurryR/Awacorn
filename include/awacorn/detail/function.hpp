@@ -5,8 +5,8 @@
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2022.
  */
-#include <memory>
 #include <functional>
+#include <memory>
 namespace awacorn {
 namespace detail {
 template <typename>
@@ -49,7 +49,12 @@ class function<Ret(Args...)> {
   function() = default;
   template <typename U>
   function(U&& fn)
-      : ptr(std::unique_ptr<_m_base>(new _m_derived<U>(std::forward<U>(fn)))) {}
+      : ptr(std::unique_ptr<_m_base>(new _m_derived<U>(std::forward<U>(fn)))) {
+    static_assert(
+        std::is_same<decltype(std::declval<U>()(std::declval<Args>()...)),
+                     Ret>::value,
+        "T is not the same as Ret(Args...)");
+  }
   function(const function&) = delete;
   function(function&& fn) : ptr(std::move(fn.ptr)) {}
   function& operator=(function&& fn) {

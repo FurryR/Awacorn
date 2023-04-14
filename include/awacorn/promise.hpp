@@ -667,6 +667,11 @@ class promise<void> : public basic_promise {
     using error_type = detail::function<void(const any&)>;
     using finally_type = detail::function<void()>;
     void then(type&& fn) {
+      // if (_then) {
+      //   _then = [fn]() -> void {
+
+      //   }
+      // } else
       _then = std::move(fn);
       if (_status == Fulfilled) {
         _then();

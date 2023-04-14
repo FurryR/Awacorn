@@ -61,16 +61,16 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 | 选项                    | 描述                                                              | 要求                       |
 | ----------------------- | ----------------------------------------------------------------- | -------------------------- |
-| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。          | N/A                        |
-| -DAWACORN_USE_BOOST     | :construction: 使用 `boost::context::continuation` 作为协程实现。 | `boost_context`            |
+| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。    | N/A                        |
+| -DAWACORN_USE_BOOST     | :construction: 使用 `boost::coroutines2::coroutine` 作为协程实现。 | `boost_coroutine`          |
 | -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                   | `ucontext.h` (libucontext) |
 
 :bulb: 提示: 当 `-DAWACORN_USE_BOOST` 和 `-DAWACORN_USE_UCONTEXT` 均未被指定时，Awacorn 将自动指定最优实现。
 
 :warning: 警告: 当 `boost` 和 `ucontext` 均无法使用时，编译将失败。请安装 `libucontext` 或 `libboost`。
 
-- [boost::context](https://github.com/boostorg/context):
-  - :penguin: Debian: `apt install libboost-context-dev`
+- [boost::coroutines2](https://github.com/boostorg/coroutine2):
+  - :penguin: Debian: `apt install libboost-coroutine-dev`
   - :iphone: Termux: `apt install boost-headers`
 - [libucontext](https://github.com/kaniini/libucontext):
   - :white_check_mark: 几乎所有 `i386/x86_64` Linux 发行版都包含 `ucontext` 支持。
