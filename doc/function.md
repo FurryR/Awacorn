@@ -1,6 +1,6 @@
 # function
 
-如你所见，在 `awacorn::detail` 命名空间内有名为 `function` 的内部类。它是 Awacorn 的高性能 `std::function` 实现，用于节省时间/空间成本。
+:zap: 如你所见，在 `awacorn::detail` 命名空间内有名为 `function` 的内部类。它是 Awacorn 的高性能 `std::function` 实现，用于节省时间/空间成本。
 
 ## 目录
 

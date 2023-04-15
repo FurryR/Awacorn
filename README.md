@@ -59,11 +59,11 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 以下是 Awacorn 支持的编译选项。
 
-| 选项                    | 描述                                                              | 要求                       |
-| ----------------------- | ----------------------------------------------------------------- | -------------------------- |
-| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。    | N/A                        |
+| 选项                    | 描述                                                               | 要求                       |
+| ----------------------- | ------------------------------------------------------------------ | -------------------------- |
+| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。     | N/A                        |
 | -DAWACORN_USE_BOOST     | :construction: 使用 `boost::coroutines2::coroutine` 作为协程实现。 | `boost_coroutine`          |
-| -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                   | `ucontext.h` (libucontext) |
+| -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                    | `ucontext.h` (libucontext) |
 
 :bulb: 提示: 当 `-DAWACORN_USE_BOOST` 和 `-DAWACORN_USE_UCONTEXT` 均未被指定时，Awacorn 将自动指定最优实现。
 
@@ -80,12 +80,13 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 以下是 Awacorn 的组件大览。
 
-| 组件名      | 描述                                            | 依赖                                | 文档                                |
-| ----------- | ----------------------------------------------- | ----------------------------------- | ----------------------------------- |
-| `event`     | Awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: [event](doc/event.md)       |
-| `promise`   | 类似于 Javascript 的 Promise，低成本 & 强类型。 | void                                | :wolf: [promise](doc/promise.md)    |
-| `generator` | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: [generator](doc/generator.md) |
-| `function`  | Awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: [function](doc/function.md)  |
+| 组件名      | 描述                                            | 依赖                                | 文档                                    |
+| ----------- | ----------------------------------------------- | ----------------------------------- | --------------------------------------- |
+| `event`     | Awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: <br>[event](doc/event.md)       |
+| `promise`   | 类似于 Javascript 的 Promise，低成本 & 强类型。 | void                                | :wolf: <br>[promise](doc/promise.md)    |
+| `generator` | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: <br>[generator](doc/generator.md) |
+| `function`  | Awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: <br>[function](doc/function.md)  |
+| `capture`   | Awacorn 采用的内部万能捕获实现。                | void                                | :ox: <br>[capture](doc/capture.md)      |
 
 :beginner: 点击 **文档** 即可查看组件相关的 **详细文档**。
 

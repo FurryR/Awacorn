@@ -16,8 +16,8 @@ class function<Ret(Args...)> {
   struct _m_base {
     virtual Ret operator()(Args...) = 0;
     virtual const std::type_info& target_type() const noexcept = 0;
-    virtual void* target() noexcept = 0;
-    virtual const void* target() const noexcept = 0;
+    virtual void* target(const std::type_info&) noexcept = 0;
+    virtual const void* target(const std::type_info&) const noexcept = 0;
     virtual ~_m_base() = default;
   };
   template <typename T>
@@ -31,13 +31,11 @@ class function<Ret(Args...)> {
     const std::type_info& target_type() const noexcept override {
       return typeid(value_type);
     }
-    void* target() noexcept override {
-      if (typeid(T) != typeid(value_type)) return nullptr;
-      return &fn;
+    void* target(const std::type_info& info) noexcept override {
+      return info == typeid(value_type) ? &fn : nullptr;
     }
-    const void* target() const noexcept override {
-      if (typeid(T) != typeid(value_type)) return nullptr;
-      return &fn;
+    const void* target(const std::type_info& info) const noexcept override {
+      return info == typeid(value_type) ? &fn : nullptr;
     }
     Ret operator()(Args... args) override {
       return fn(std::forward<Args>(args)...);
@@ -47,6 +45,12 @@ class function<Ret(Args...)> {
 
  public:
   function() = default;
+  /**
+   * @brief 由可调用对象构造函数对象。
+   * 
+   * @tparam U 可调用对象的类型
+   * @param fn 可调用对象的实例。
+   */
   template <typename U>
   function(U&& fn)
       : ptr(std::unique_ptr<_m_base>(new _m_derived<U>(std::forward<U>(fn)))) {
@@ -60,23 +64,49 @@ class function<Ret(Args...)> {
   function& operator=(function&& fn) {
     return (ptr = std::move(fn.ptr)), *this;
   }
-  void swap(function& fn) noexcept { std::swap(ptr, fn.ptr); }
-  operator bool() const noexcept { return !!ptr; }
-  const std::type_info& target_type() const noexcept {
-    if (*this) return ptr->target_type();
-    return typeid(void);
+  /**
+   * @brief 将此函数对象跟 fn 交换。
+   * 
+   * @param fn 目标函数对象。
+   */
+  inline void swap(function& fn) noexcept { std::swap(ptr, fn.ptr); }
+  /**
+   * @brief 判断函数是否已被初始化。
+   * 
+   * @return true 函数已被初始化
+   * @return false 函数未被初始化
+   */
+  inline operator bool() const noexcept { return !!ptr; }
+  /**
+   * @brief 获得目标类型的运行时类型信息 (RTTI)。
+   * @warning 如果函数未被初始化则返回 typeid(void)。
+   * 
+   * @return const std::type_info& 运行时类型信息
+   */
+  inline const std::type_info& target_type() const noexcept {
+    return *this ? ptr->target_type() : typeid(void);
+  }
+  /**
+   * @brief 获得目标类型的指针。如果类型不匹配，返回 nullptr。
+   *
+   * @tparam T 目标类型。
+   * @return T* 目标类型的指针。
+   */
+  template <typename T>
+  inline T* target() noexcept {
+    return *this ? (T*)ptr->target(typeid(T)) : nullptr;
   }
   template <typename T>
-  T* target() noexcept {
-    if (*this) return (T*)ptr->template target<T>();
-    return nullptr;
+  inline const T* target() const noexcept {
+    return *this ? (T*)ptr->target(typeid(T)) : nullptr;
   }
-  template <typename T>
-  const T* target() const noexcept {
-    if (*this) return (T*)ptr->template target<T>();
-    return nullptr;
-  }
-  inline Ret operator()(Args... args) const {
+  /**
+   * @brief 调用函数。
+   * 
+   * @param args 参数列表。
+   * @return Ret 函数的返回值。
+   */
+  inline Ret operator()(Args&&... args) const {
     if (*this) return (*ptr)(std::forward<Args>(args)...);
     throw std::bad_function_call();
   }
