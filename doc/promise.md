@@ -23,7 +23,7 @@
 
 :hash: `Promise` 直译为 **承诺**，而 Awacorn 的 `Promise` 则有点类似于 Javascript `Promise`。
 
-:closed_book: 在 C++ 制作好用的 `Promise` 这件事，Awacorn 并不是第一个，比如下面几个库就实现了可以**链式注册回调函数** 的功能：
+:closed_book: 在 C++ 制作好用的 `Promise` 这件事，Awacorn 并不是第一个，比如下面几个库就实现了可以**链式注册回调函数**的功能：
 
 - :diamond_shape_with_a_dot_inside: [folly](https://github.com/facebook/folly) 在 `folly::makeFuture` 以后支持链式调用 `then`。
 - :candy: [promise-cpp](https://github.com/xhawk18/promise-cpp) 是一个符合 A+ 标准的 C++ Promise 实现。
