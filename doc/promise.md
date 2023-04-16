@@ -29,7 +29,7 @@
 - :candy: [promise-cpp](https://github.com/xhawk18/promise-cpp) 是一个符合 A+ 标准的 C++ Promise 实现。
 - :boot: [boost-thread](https://github.com/boostorg/thread) `boost::future` 同样支持 `then`。
 
-:question: 那么 Awacorn 为什么要重新造一遍轮子呢？以下是这三个库的不同点对比。
+:question: 那么 Awacorn 为什么要重新造一遍轮子呢？以下是这四个库的不同点对比。
 
 | Awacorn                                 | folly                               | promise-cpp                             | boost-thread                                 |
 | --------------------------------------- | ----------------------------------- | --------------------------------------- | -------------------------------------------- |
@@ -37,10 +37,10 @@
 | :white_check_mark: 编译时强类型支持     | :white_check_mark: 编译时强类型支持 | :x: 弱类型(伪强类型)支持                | :white_check_mark: 编译时强类型支持          |
 | :x: 弱类型异常处理                      | :white_check_mark: 强类型异常处理   | :x: 弱类型异常处理                      | :x: 基于 `std::exception_ptr` 的基本异常处理 |
 | :white_check_mark: 支持多次设定回调函数 | :x: 不支持多次设定回调函数          | :x: 不支持多次设定回调函数              | :x: 不支持多次设定回调函数                   |
-| :x: 线程不安全                          | :white_check_mark: 线程安全         | :x: 线程不安全                          | :white_check_mark: 线程安全                  |
+| :x: 线程不安全                          | :white_check_mark: 线程安全         | :white_check_mark: 线程安全             | :white_check_mark: 线程安全                  |
 | :white_check_mark: 不绑定事件循环       | :white_check_mark: 不绑定事件循环   | :white_check_mark: 不绑定事件循环       | :white_check_mark: 不绑定事件循环            |
 | :white_check_mark: 完全并发组件支持     | :x: 部分并发组件支持                | :x: 部分并发组件支持                    | :x: 部分并发组件支持                         |
-| :white_check_mark: 回调函数生命周期良构 | :x: 未定义                          | :x: 未定义                              | :x: 未定义                                   |
+| :white_check_mark: 回调函数生命周期确定 | :x: 未定义                          | :x: 未定义                              | :x: 未定义                                   |
 | :white_check_mark: 可中断               | :white_check_mark: 可中断           | :x: 不可中断                            | :white_check_mark: 可中断                    |
 | :white_check_mark: Header-only          | :x: 不适用                          | :white_check_mark: Header-only          | :x: 不适用                                   |
 
