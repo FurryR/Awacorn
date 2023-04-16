@@ -76,23 +76,31 @@ class any {
     return data.emplace<T>(std::forward<Args>(args)...);
   }
   /**
-   * @brief 将对象转换为指定类型。
-   * @throw std::bad_any_cast (aka awacorn::bad_any_cast)
-   *
-   * @tparam T 类型。
-   * @return T 这个类型的实例（如果允许转换）。
-   */
-  template <typename T>
-  inline T cast() const {
-    return std::any_cast<T>(data);
-  }
-  /**
    * @brief 和另一个对象交换。
    *
    * @param other 要交换的对象。
    */
   inline void swap(any& other) noexcept { std::swap(other.data, data); }
+  template <typename T>
+  friend T any_cast(const any&);
+  template <typename T>
+  friend T any_cast(any&&);
 };
+/**
+ * @brief 将对象转换为指定类型。
+ * @throw std::bad_any_cast (aka awacorn::bad_any_cast)
+ *
+ * @tparam T 类型。
+ * @return T 这个类型的实例（如果允许转换）。
+ */
+template <typename T>
+inline T any_cast(const any& v) {
+  return std::any_cast<T>(v.data);
+}
+template <typename T>
+inline T any_cast(any&& v) {
+  return std::any_cast<T>(v.data);
+}
 #else
 /**
  * @brief awacorn::any::cast 抛出的错误。
@@ -181,27 +189,39 @@ class any {
     return t->data;
   }
   /**
-   * @brief 将对象转换为指定类型。
-   * @throw std::bad_any_cast (aka awacorn::bad_any_cast)
-   *
-   * @tparam T 类型。
-   * @return T 这个类型的实例（如果允许转换）。
-   */
-  template <typename T>
-  T cast() const {
-    using Decay = typename std::decay<T>::type;
-    any::_m_derived<Decay>* _ptr =
-        dynamic_cast<any::_m_derived<Decay>*>(ptr.get());
-    if (_ptr) return _ptr->data;
-    throw bad_any_cast();
-  }
-  /**
    * @brief 和另一个对象交换。
    *
    * @param other 要交换的对象。
    */
   inline void swap(any& other) noexcept { std::swap(other.ptr, ptr); }
+  template <typename T>
+  T any_cast(const any&);
+  template <typename T>
+  T any_cast(any&&);
 };
+/**
+ * @brief 将对象转换为指定类型。
+ * @throw std::bad_any_cast (aka awacorn::bad_any_cast)
+ *
+ * @tparam T 类型。
+ * @return T 这个类型的实例（如果允许转换）。
+ */
+template <typename T>
+T any_cast(const any& v) {
+  using Decay = typename std::decay<T>::type;
+  any::_m_derived<Decay>* _ptr =
+      dynamic_cast<any::_m_derived<Decay>*>(v.ptr.get());
+  if (_ptr) return _ptr->data;
+  throw bad_any_cast();
+}
+template <typename T>
+T any_cast(any&& v) {
+  using Decay = typename std::decay<T>::type;
+  any::_m_derived<Decay>* _ptr =
+      dynamic_cast<any::_m_derived<Decay>*>(v.ptr.get());
+  if (_ptr) return _ptr->data;
+  throw bad_any_cast();
+}
 #endif
 };  // namespace awacorn
 #endif
