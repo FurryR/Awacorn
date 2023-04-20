@@ -783,40 +783,50 @@ class promise<void> : public basic_promise {
   explicit promise() : pm(new _promise()) {}
 };
 namespace detail {
-template <typename ResultType, typename Tuple, size_t TOTAL, size_t N>
+template <typename ResultType, size_t N>
 struct _promise_all {
-  static void apply(const Tuple& t, const std::shared_ptr<ResultType>& result,
+  template <typename T, typename... Args>
+  static void apply(const promise<ResultType>& pm,
+                    const std::shared_ptr<ResultType>& result,
                     const std::shared_ptr<size_t>& done_count,
-                    const promise<ResultType>& pm) {
-    _promise_all<ResultType, Tuple, TOTAL, N - 1>::apply(t, result, done_count,
-                                                         pm);
-    std::get<N>(t).then(
+                    const promise<T>& current, Args&&... args) {
+    _promise_all<ResultType, N - 1>::apply(pm, result, done_count,
+                                           std::forward<Args>(args)...);
+    current.then(
         [result, done_count,
          pm](const typename std::tuple_element<N, ResultType>::type& value)
             -> void {
-          std::get<N>(*result) = value;
-          if ((++(*done_count)) == TOTAL) {
-            pm.resolve(*result);
+          if (result) {
+            std::get<N>(*result) = value;
+            if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+              pm.resolve(std::move(*result));
+              result.reset();
+            }
           }
         });
     std::get<N>(t).error([pm](const awacorn::any& v) -> void { pm.reject(v); });
   }
 };
-template <typename ResultType, typename Tuple, size_t TOTAL>
-struct _promise_all<ResultType, Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, const std::shared_ptr<ResultType>& result,
+template <typename ResultType>
+struct _promise_all<ResultType, 0> {
+  template <typename T>
+  static void apply(const promise<ResultType>& pm,
+                    const std::shared_ptr<ResultType>& result,
                     const std::shared_ptr<size_t>& done_count,
-                    const promise<ResultType>& pm) {
-    std::get<0>(t).then(
+                    const promise<T>& current) {
+    current.then(
         [result, done_count,
-         pm](const typename std::tuple_element<0, ResultType>::type& value)
+         pm](const typename std::tuple_element<N, ResultType>::type& value)
             -> void {
-          std::get<0>(*result) = value;
-          if ((++(*done_count)) == TOTAL) {
-            pm.resolve(*result);
+          if (result) {
+            std::get<N>(*result) = value;
+            if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+              pm.resolve(std::move(*result));
+              result.reset();
+            }
           }
         });
-    std::get<0>(t).error([pm](const awacorn::any& v) -> void { pm.reject(v); });
+    std::get<N>(t).error([pm](const awacorn::any& v) -> void { pm.reject(v); });
   }
 };
 template <typename ResultType, typename Tuple, size_t TOTAL, size_t N>
@@ -893,20 +903,18 @@ namespace gather {
  * reject。返回一个获得所有结果的 Promise。
  *
  * @tparam Args 返回类型
- * @param arg Args 多个 Promise。跟返回类型有关。
+ * @param args Args 多个 Promise。跟返回类型有关。
  * @return promise<std::tuple<Args...>> 获得所有结果的 Promise。
  */
 template <typename... Args>
-static inline promise<std::tuple<Args...>> all(const promise<Args>&... arg) {
+static inline promise<std::tuple<Args...>> all(const promise<Args>&... args) {
   using ResultType = std::tuple<Args...>;
   promise<ResultType> pm;
   std::shared_ptr<ResultType> result =
       std::shared_ptr<ResultType>(new ResultType());
   std::shared_ptr<size_t> done_count = std::shared_ptr<size_t>(new size_t(0));
-  detail::_promise_all<
-      ResultType, std::tuple<promise<Args>...>, sizeof...(Args),
-      sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...), result,
-                                  done_count, pm);
+  detail::_promise_all<ResultType, sizeof...(Args) - 1>::apply(
+      pm, result, done_count, args...);
   return pm;
 }
 /**
