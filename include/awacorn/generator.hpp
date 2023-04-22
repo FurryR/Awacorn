@@ -319,7 +319,7 @@ struct basic_context {
         *failbit = false;
         throw *result;
       }
-      return awacorn::any_cast<T>(*result);
+      return any_cast<T>(*result);
     }
     static void apply(basic_context<State>* ctx, const promise<void>& value,
                       any* result, bool* failbit) {
@@ -452,17 +452,17 @@ struct generator {
         this->ctx.resume();
         if (this->ctx._status == Yielded) {
           return result_t<RetType, YieldType>::generate_yield(
-              awacorn::any_cast<YieldType>(this->ctx._result));
+              any_cast<YieldType>(this->ctx._result));
         } else if (this->ctx._status == Returned) {
           return result_t<RetType, YieldType>::generate_ret(
-              awacorn::any_cast<RetType>(this->ctx._result));
+              any_cast<RetType>(this->ctx._result));
         } else if (this->ctx._status == Cancelled) {
           throw cancel_error();
         }
         throw this->ctx._result;
       } else if (this->ctx._status == Returned) {
         return result_t<RetType, YieldType>::generate_ret(
-            awacorn::any_cast<RetType>(this->ctx._result));
+            any_cast<RetType>(this->ctx._result));
       } else if (this->ctx._status == Throwed) {
         throw this->ctx._result;
       }
@@ -586,7 +586,7 @@ struct generator<void, YieldType> {
         this->ctx.resume();
         if (this->ctx._status == Yielded) {
           return result_t<void, YieldType>::generate_yield(
-              awacorn::any_cast<YieldType>(this->ctx._result));
+              any_cast<YieldType>(this->ctx._result));
         } else if (this->ctx._status == Returned) {
           return result_t<void, YieldType>::generate_ret();
         } else if (this->ctx._status == Cancelled) {
@@ -738,7 +738,7 @@ struct async_generator {
         if (this->ctx._status == Awaiting) {
           std::weak_ptr<_generator> ref = this->shared_from_this();
           promise<result_t<RetType, YieldType>> pm;
-          promise<any> tmp = awacorn::any_cast<promise<any>>(this->ctx._result);
+          promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
           tmp.then([ref, pm](const any& res) {
                if (std::shared_ptr<_generator> tmp = ref.lock()) {
                  tmp->ctx._result = res;
@@ -765,17 +765,17 @@ struct async_generator {
           return pm;
         } else if (this->ctx._status == Yielded) {
           return resolve(result_t<RetType, YieldType>::generate_yield(
-              awacorn::any_cast<YieldType>(this->ctx._result)));
+              any_cast<YieldType>(this->ctx._result)));
         } else if (this->ctx._status == Returned) {
           return resolve(result_t<RetType, YieldType>::generate_ret(
-              awacorn::any_cast<RetType>(this->ctx._result)));
+              any_cast<RetType>(this->ctx._result)));
         } else if (this->ctx._status == Cancelled) {
           return reject<result_t<RetType, YieldType>>(cancel_error());
         }
         return reject<result_t<RetType, YieldType>>(this->ctx._result);
       } else if (this->ctx._status == Returned) {
         return resolve(result_t<RetType, YieldType>::generate_ret(
-            awacorn::any_cast<RetType>(this->ctx._result)));
+            any_cast<RetType>(this->ctx._result)));
       } else if (this->ctx._status == Throwed) {
         return reject<result_t<RetType, YieldType>>(this->ctx._result);
       }
@@ -924,7 +924,7 @@ struct async_generator<void, YieldType> {
         if (this->ctx._status == Awaiting) {
           std::weak_ptr<_generator> ref = this->shared_from_this();
           promise<result_t<void, YieldType>> pm;
-          promise<any> tmp = awacorn::any_cast<promise<any>>(this->ctx._result);
+          promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
           tmp.then([ref, pm](const any& res) {
                if (std::shared_ptr<_generator> tmp = ref.lock()) {
                  tmp->ctx._result = res;
@@ -951,7 +951,7 @@ struct async_generator<void, YieldType> {
           return pm;
         } else if (this->ctx._status == Yielded) {
           return resolve(result_t<void, YieldType>::generate_yield(
-              awacorn::any_cast<YieldType>(this->ctx._result)));
+              any_cast<YieldType>(this->ctx._result)));
         } else if (this->ctx._status == Returned) {
           return resolve(result_t<void, YieldType>::generate_ret());
         } else if (this->ctx._status == Cancelled) {
@@ -1083,7 +1083,7 @@ struct async_generator<RetType, void> {
         if (this->ctx._status == Awaiting) {
           std::shared_ptr<_generator> ref = this->shared_from_this();
           promise<RetType> pm;
-          promise<any> tmp = awacorn::any_cast<promise<any>>(this->ctx._result);
+          promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
           tmp.then([ref, pm](const any& res) {
                ref->ctx._result = res;
                ref->_await_next()
@@ -1099,11 +1099,11 @@ struct async_generator<RetType, void> {
               });
           return pm;
         } else if (this->ctx._status == Returned) {
-          awacorn::any_cast<RetType>(return resolve(this->ctx._result));
+          return resolve(any_cast<RetType>(this->ctx._result));
         }
         return reject<RetType>(this->ctx._result);
       } else if (this->ctx._status == Returned) {
-        awacorn::any_cast<RetType>(return resolve(this->ctx._result));
+        return resolve(any_cast<RetType>(this->ctx._result));
       } else if (this->ctx._status == Throwed) {
         return reject<RetType>(this->ctx._result);
       }
@@ -1219,7 +1219,7 @@ struct async_generator<void, void> {
         if (this->ctx._status == Awaiting) {
           std::shared_ptr<_generator> ref = this->shared_from_this();
           promise<void> pm;
-          promise<any> tmp = awacorn::any_cast<promise<any>>(this->ctx._result);
+          promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
           tmp.then([ref, pm](const any& res) {
                ref->ctx._result = res;
                ref->_await_next()

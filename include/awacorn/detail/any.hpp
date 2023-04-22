@@ -12,80 +12,10 @@ namespace awacorn {
  */
 using bad_any_cast = std::bad_any_cast;
 /**
- * @brief C++ 17 以后对 std::any 的包装。
+ * @brief C++ 17 以后对 std::any 的镜像。
  * @see https://en.cppreference.com/w/cpp/utility/any
  */
-class any {
-  std::any data;
-
- public:
-  any() = default;
-  /**
-   * @brief 由指定对象初始化 any 容器。
-   *
-   * @tparam T 对象类型。
-   * @param val 对象实例。
-   */
-  template <typename T>
-  any(T&& val) : data(std::forward<T>(val)) {}
-  any(const any& v) : data(v.data) {}
-  any(any&& v) : data(std::move(v.data)) {}
-  any& operator=(const any& v) {
-    data = v.data;
-    return *this;
-  }
-  any& operator=(any&& v) {
-    data = std::move(v.data);
-    return *this;
-  }
-  /**
-   * @brief 获得对象的运行时类型信息 (RTTI)。
-   * @warning 如果对象未被初始化，返回 typeid(void)。
-   *
-   * @return const std::type_info& 运行时类型信息。
-   */
-  inline const std::type_info& type() const { return data.type(); }
-  /**
-   * @brief 判断此 any 容器是否有值。
-   *
-   * @return true 有值
-   * @return false 无值
-   */
-  inline bool has_value() const noexcept { return data.has_value(); }
-  /**
-   * @brief 清空 any 容器。
-   */
-  inline void reset() noexcept { data.reset(); }
-  /**
-   * @brief 将此 any 容器转换为 std::any。
-   *
-   * @return std::any
-   * @since C++17
-   */
-  inline std::any as_any() const { return data; }
-  /**
-   * @brief 由指定参数列表初始化对象。
-   *
-   * @tparam T 对象类型。
-   * @tparam Args 参数列表类型。
-   * @param args 参数列表。
-   * @return T& 对象的引用。
-   */
-  template <typename T, typename... Args>
-  inline T& emplace(Args&&... args) {
-    return data.emplace<T>(std::forward<Args>(args)...);
-  }
-  /**
-   * @brief 和另一个对象交换。
-   *
-   * @param other 要交换的对象。
-   */
-  inline void swap(any& other) noexcept { std::swap(other.data, data); }
-  template <typename T>
-  friend T any_cast(const any&);
-  template <typename T>
-  friend T any_cast(any&&);
-};
+using any = std::any;
 /**
  * @brief 将对象转换为指定类型。
  * @throw std::bad_any_cast (aka awacorn::bad_any_cast)
@@ -93,13 +23,9 @@ class any {
  * @tparam T 类型。
  * @return T 这个类型的实例（如果允许转换）。
  */
-template <typename T>
-inline T any_cast(const any& v) {
-  return std::any_cast<T>(v.data);
-}
-template <typename T>
-inline T any_cast(any&& v) {
-  return std::any_cast<T>(v.data);
+template <typename T, typename... Args>
+inline T any_cast(Args&&... args) {
+  return std::any_cast<T>(std::forward<Args>(args)...);
 }
 #else
 /**
@@ -195,13 +121,13 @@ class any {
    */
   inline void swap(any& other) noexcept { std::swap(other.ptr, ptr); }
   template <typename T>
-  T any_cast(const any&);
+  friend T any_cast(const any&);
   template <typename T>
-  T any_cast(any&&);
+  friend T any_cast(any&&);
 };
 /**
  * @brief 将对象转换为指定类型。
- * @throw std::bad_any_cast (aka awacorn::bad_any_cast)
+ * @throw awacorn::bad_any_cast
  *
  * @tparam T 类型。
  * @return T 这个类型的实例（如果允许转换）。

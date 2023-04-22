@@ -12,6 +12,8 @@
 #include "detail/capture.hpp"
 #include "detail/function.hpp"
 namespace awacorn {
+namespace detail {
+
 struct basic_promise {
   /**
    * @brief promise 的状态。
@@ -398,7 +400,6 @@ struct basic_promise {
     }
   };
 };
-
 template <typename T, template <typename T2> class PromiseT>
 struct remove_promise {
   using type = T;
@@ -407,13 +408,23 @@ template <typename T, template <typename T2> class PromiseT>
 struct remove_promise<PromiseT<T>, PromiseT> {
   using type = T;
 };
+template <typename T, typename ReplaceT>
+struct replace_void {
+  using type = T;
+};
+template <typename ReplaceT>
+struct replace_void<void, ReplaceT> {
+  using type = ReplaceT;
+};
+};  // namespace detail
+
 /**
  * @brief promise 对象。
  *
  * @tparam T Promise返回的值。
  */
 template <typename T>
-struct promise : public basic_promise {
+struct promise : public detail::basic_promise {
   using value_type = typename std::decay<T>::type;
 
  private:
@@ -545,7 +556,7 @@ struct promise : public basic_promise {
    * @return promise<Ret> 对函数的 promise
    */
   template <typename U>
-  inline promise<typename remove_promise<
+  inline promise<typename detail::remove_promise<
       decltype(std::declval<U>()(std::declval<value_type>())), promise>::type>
   then(U&& fn) const {
     using Ret = decltype(std::declval<U>()(std::declval<value_type>()));
@@ -561,7 +572,7 @@ struct promise : public basic_promise {
    * @return promise<Ret> 对函数的 Promise。
    */
   template <typename U>
-  inline promise<typename remove_promise<
+  inline promise<typename detail::remove_promise<
       decltype(std::declval<U>()(std::declval<any>())), promise>::type>
   error(U&& fn) const {
     using Ret = decltype(std::declval<U>()(std::declval<any>()));
@@ -577,8 +588,8 @@ struct promise : public basic_promise {
    * @return promise<Ret> 对函数的 Promise。
    */
   template <typename U>
-  inline promise<
-      typename remove_promise<decltype(std::declval<U>()()), promise>::type>
+  inline promise<typename detail::remove_promise<decltype(std::declval<U>()()),
+                                                 promise>::type>
   finally(U&& fn) const {
     using Ret = decltype(std::declval<U>()());
     return __finally_impl<Ret, promise, _promise>::apply(pm,
@@ -612,7 +623,7 @@ struct promise : public basic_promise {
  * @brief 没有值的 promise 对象。
  */
 template <>
-class promise<void> : public basic_promise {
+class promise<void> : public detail::basic_promise {
   struct _promise {
     using type = detail::function<void()>;
     using error_type = detail::function<void(const any&)>;
@@ -652,7 +663,7 @@ class promise<void> : public basic_promise {
     }
     void finally(finally_type&& fn) {
       if (_status != Pending) {
-        _finally();
+        fn();
       } else {
         if (_finally) {
           detail::capture_helper<finally_type> arg_finally =
@@ -722,8 +733,8 @@ class promise<void> : public basic_promise {
    * @return promise<Ret> 对函数的 promise
    */
   template <typename U>
-  inline promise<
-      typename remove_promise<decltype(std::declval<U>()()), promise>::type>
+  inline promise<typename detail::remove_promise<decltype(std::declval<U>()()),
+                                                 promise>::type>
   then(U&& fn) const {
     using Ret = decltype(std::declval<U>()());
     return __then_impl<Ret, void, promise, _promise>::apply(
@@ -738,7 +749,7 @@ class promise<void> : public basic_promise {
    * @return promise<Ret> 对函数的 Promise。
    */
   template <typename U>
-  inline promise<typename remove_promise<
+  inline promise<typename detail::remove_promise<
       decltype(std::declval<U>()(std::declval<any>())), promise>::type>
   error(U&& fn) const {
     using Ret = decltype(std::declval<U>()(std::declval<any>()));
@@ -754,8 +765,8 @@ class promise<void> : public basic_promise {
    * @return promise<Ret> 对函数的 Promise。
    */
   template <typename U>
-  inline promise<
-      typename remove_promise<decltype(std::declval<U>()()), promise>::type>
+  inline promise<typename detail::remove_promise<decltype(std::declval<U>()()),
+                                                 promise>::type>
   finally(U&& fn) const {
     using Ret = decltype(std::declval<U>()());
     return __finally_impl<Ret, promise, _promise>::apply(pm,
@@ -786,112 +797,179 @@ namespace detail {
 template <typename ResultType, size_t N>
 struct _promise_all {
   template <typename T, typename... Args>
-  static void apply(const promise<ResultType>& pm,
-                    const std::shared_ptr<ResultType>& result,
-                    const std::shared_ptr<size_t>& done_count,
-                    const promise<T>& current, Args&&... args) {
+  static inline void apply(const promise<ResultType>& pm,
+                           const std::shared_ptr<ResultType>& result,
+                           const std::shared_ptr<size_t>& done_count,
+                           const promise<T>& current, Args&&... args) {
     _promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                            std::forward<Args>(args)...);
-    current.then(
-        [result, done_count,
-         pm](const typename std::tuple_element<N, ResultType>::type& value)
-            -> void {
-          if (result) {
-            std::get<N>(*result) = value;
-            if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
-              pm.resolve(std::move(*result));
-              result.reset();
-            }
-          }
-        });
-    std::get<N>(t).error([pm](const awacorn::any& v) -> void { pm.reject(v); });
+    current.then([result, done_count, pm](const T& value) -> void {
+      if (result) {
+        std::get<N>(*result) = value;
+        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+          pm.resolve(std::move(*result));
+        }
+      }
+    });
+    current.error([pm](const awacorn::any& v) -> void { pm.reject(v); });
+  }
+  template <typename... Args>
+  static inline void apply(const promise<ResultType>& pm,
+                           const std::shared_ptr<ResultType>& result,
+                           const std::shared_ptr<size_t>& done_count,
+                           const promise<void>& current, Args&&... args) {
+    _promise_all<ResultType, N - 1>::apply(pm, result, done_count,
+                                           std::forward<Args>(args)...);
+    current.then([result, done_count, pm]() -> void {
+      if (result) {
+        std::get<N>(*result) = nullptr;
+        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+          pm.resolve(std::move(*result));
+        }
+      }
+    });
+    current.error([pm](const awacorn::any& v) -> void { pm.reject(v); });
   }
 };
 template <typename ResultType>
 struct _promise_all<ResultType, 0> {
   template <typename T>
-  static void apply(const promise<ResultType>& pm,
-                    const std::shared_ptr<ResultType>& result,
-                    const std::shared_ptr<size_t>& done_count,
-                    const promise<T>& current) {
-    current.then(
-        [result, done_count,
-         pm](const typename std::tuple_element<N, ResultType>::type& value)
-            -> void {
-          if (result) {
-            std::get<N>(*result) = value;
-            if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
-              pm.resolve(std::move(*result));
-              result.reset();
-            }
-          }
-        });
-    std::get<N>(t).error([pm](const awacorn::any& v) -> void { pm.reject(v); });
+  static inline void apply(const promise<ResultType>& pm,
+                           const std::shared_ptr<ResultType>& result,
+                           const std::shared_ptr<size_t>& done_count,
+                           const promise<T>& current) {
+    current.then([result, done_count, pm](const T& value) -> void {
+      if (result) {
+        std::get<0>(*result) = value;
+        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+          pm.resolve(std::move(*result));
+        }
+      }
+    });
+    current.error([pm](const awacorn::any& v) -> void { pm.reject(v); });
+  }
+  static inline void apply(const promise<ResultType>& pm,
+                           const std::shared_ptr<ResultType>& result,
+                           const std::shared_ptr<size_t>& done_count,
+                           const promise<void>& current) {
+    current.then([result, done_count, pm]() -> void {
+      if (result) {
+        std::get<0>(*result) = nullptr;
+        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+          pm.resolve(std::move(*result));
+        }
+      }
+    });
+    current.error([pm](const awacorn::any& v) -> void { pm.reject(v); });
   }
 };
-template <typename ResultType, typename Tuple, size_t TOTAL, size_t N>
+template <size_t TOTAL>
 struct _promise_any {
-  static void apply(const Tuple& t, const std::shared_ptr<size_t>& fail_count,
-                    const promise<void>& pm) {
-    _promise_any<ResultType, Tuple, TOTAL, N - 1>::apply(t, fail_count, pm);
-    std::get<N>(t).then(
-        [pm](const typename std::tuple_element<N, ResultType>::type&) -> void {
-          pm.resolve();
-        });
-    std::get<N>(t).error([pm, fail_count](const awacorn::any& v) -> void {
+  template <typename T, typename... Args>
+  static inline void apply(const promise<any>& pm,
+                           const std::shared_ptr<size_t>& fail_count,
+                           const promise<T>& current, Args&&... args) {
+    _promise_any<TOTAL>::apply(pm, fail_count, std::forward<Args>(args)...);
+    current.then([pm](const T& v) { pm.resolve(v); });
+    current.error([pm, fail_count](const awacorn::any& v) {
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(v);
+      }
+    });
+  }
+  template <typename... Args>
+  static inline void apply(const promise<any>& pm,
+                           const std::shared_ptr<size_t>& fail_count,
+                           const promise<void>& current, Args&&... args) {
+    _promise_any<TOTAL>::apply(pm, fail_count, std::forward<Args>(args)...);
+    current.then([pm]() { pm.resolve(any()); });
+    current.error([pm, fail_count](const awacorn::any& v) {
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(v);
+      }
+    });
+  }
+  template <typename T>
+  static void apply(const promise<any>& pm,
+                    const std::shared_ptr<size_t>& fail_count,
+                    const promise<T>& current) {
+    current.then([pm](const T& v) { pm.resolve(v); });
+    current.error([pm, fail_count](const awacorn::any& v) {
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(v);
+      }
+    });
+  }
+  static void apply(const promise<any>& pm,
+                    const std::shared_ptr<size_t>& fail_count,
+                    const promise<void>& current) {
+    current.then([pm]() { pm.resolve(any()); });
+    current.error([pm, fail_count](const awacorn::any& v) {
       if ((++(*fail_count)) == TOTAL) {
         pm.reject(v);
       }
     });
   }
 };
-template <typename ResultType, typename Tuple, size_t TOTAL>
-struct _promise_any<ResultType, Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, const std::shared_ptr<size_t>& fail_count,
-                    const promise<void>& pm) {
-    std::get<0>(t).then(
-        [pm](const typename std::tuple_element<0, ResultType>::type&) -> void {
-          pm.resolve();
-        });
-    std::get<0>(t).error([pm, fail_count](const awacorn::any& v) -> void {
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(v);
-      }
-    });
-  }
-};
-template <typename Tuple, size_t TOTAL, size_t N>
 struct _promise_race {
-  static void apply(const Tuple& t, const promise<void>& pm) {
-    _promise_race<Tuple, TOTAL, N - 1>::apply(t, pm);
-    std::get<N>(t).finally([pm]() -> void { pm.resolve(); });
+  template <typename T, typename... Args>
+  static inline void apply(const promise<any>& pm, const promise<T>& current,
+                           Args&&... args) {
+    _promise_race::apply(pm, std::forward<Args>(args)...);
+    current.then([pm](const T& v) { pm.resolve(v); });
+    current.error([pm](const awacorn::any& v) { pm.reject(v); });
+  }
+  template <typename... Args>
+  static inline void apply(const promise<any>& pm, const promise<void>& current,
+                           Args&&... args) {
+    _promise_race::apply(pm, std::forward<Args>(args)...);
+    current.then([pm]() { pm.resolve(any()); });
+    current.error([pm](const awacorn::any& v) { pm.reject(v); });
+  }
+  template <typename T>
+  static void apply(const promise<any>& pm,
+                    const promise<T>& current) {
+    current.then([pm](const T& v) { pm.resolve(v); });
+    current.error([pm](const awacorn::any& v) { pm.reject(v); });
+  }
+  static void apply(const promise<any>& pm,
+                    const promise<void>& current) {
+    current.then([pm]() { pm.resolve(any()); });
+    current.error([pm](const awacorn::any& v) { pm.reject(v); });
   }
 };
-template <typename Tuple, size_t TOTAL>
-struct _promise_race<Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, const promise<void>& pm) {
-    std::get<0>(t).finally([pm]() -> void { pm.resolve(); });
-  }
-};
-template <typename Tuple, size_t TOTAL, size_t N>
-struct _promise_allSettled {
-  static void apply(const Tuple& t, const std::shared_ptr<size_t>& done_count,
-                    const promise<void>& pm) {
-    _promise_allSettled<Tuple, TOTAL, N - 1>::apply(t, done_count, pm);
-    std::get<N>(t).finally([done_count, pm]() -> void {
-      if ((++(*done_count)) == TOTAL) {
-        pm.resolve();
+template <typename ResultType, size_t N>
+struct _promise_all_settled {
+  template <typename T, typename... Args>
+  static inline void apply(const promise<ResultType>& pm,
+                           const std::shared_ptr<ResultType>& result,
+                           const std::shared_ptr<size_t>& done_count,
+                           const promise<T>& current, Args&&... args) {
+    _promise_all_settled<ResultType, N - 1>::apply(pm, result, done_count,
+                                                   std::forward<Args>(args)...);
+    current.finally([result, done_count, current, pm]() -> void {
+      if (result) {
+        std::get<N>(*result) = current;
+        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+          pm.resolve(std::move(*result));
+        }
       }
     });
   }
 };
-template <typename Tuple, size_t TOTAL>
-struct _promise_allSettled<Tuple, TOTAL, 0> {
-  static void apply(const Tuple& t, const std::shared_ptr<size_t>& done_count,
-                    const promise<void>& pm) {
-    std::get<0>(t).finally([done_count, pm]() -> void {
-      if ((++(*done_count)) == TOTAL) {
-        pm.resolve();
+template <typename ResultType>
+struct _promise_all_settled<ResultType, 0> {
+  template <typename T>
+  static inline void apply(const promise<ResultType>& pm,
+                           const std::shared_ptr<ResultType>& result,
+                           const std::shared_ptr<size_t>& done_count,
+                           const promise<T>& current) {
+    current.finally([result, done_count, current, pm]() -> void {
+      if (result) {
+        std::get<0>(*result) = current;
+        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+          pm.resolve(std::move(*result));
+        }
       }
     });
   }
@@ -907,12 +985,14 @@ namespace gather {
  * @return promise<std::tuple<Args...>> 获得所有结果的 Promise。
  */
 template <typename... Args>
-static inline promise<std::tuple<Args...>> all(const promise<Args>&... args) {
-  using ResultType = std::tuple<Args...>;
+static inline promise<
+    std::tuple<typename detail::replace_void<Args, std::nullptr_t>::type...>>
+all(const promise<Args>&... args) {
+  using ResultType =
+      std::tuple<typename detail::replace_void<Args, std::nullptr_t>::type...>;
   promise<ResultType> pm;
-  std::shared_ptr<ResultType> result =
-      std::shared_ptr<ResultType>(new ResultType());
-  std::shared_ptr<size_t> done_count = std::shared_ptr<size_t>(new size_t(0));
+  std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
+  std::shared_ptr<size_t> done_count = std::make_shared<size_t>(0);
   detail::_promise_all<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;
@@ -927,14 +1007,10 @@ static inline promise<std::tuple<Args...>> all(const promise<Args>&... args) {
  * @return promise<void> 回调用 Promise。
  */
 template <typename... Args>
-static inline promise<void> any(const promise<Args>&... arg) {
-  using ResultType = std::tuple<Args...>;
-  promise<void> pm;
-  std::shared_ptr<size_t> fail_count = std::shared_ptr<size_t>(new size_t(0));
-  detail::_promise_any<
-      ResultType, std::tuple<promise<Args>...>, sizeof...(Args),
-      sizeof...(Args) - 1>::apply(std::forward_as_tuple(arg...), fail_count,
-                                  pm);
+static inline promise<awacorn::any> any(const promise<Args>&... args) {
+  promise<awacorn::any> pm;
+  std::shared_ptr<size_t> fail_count = std::make_shared<size_t>(0);
+  detail::_promise_any<sizeof...(Args)>::apply(pm, fail_count, args...);
   return pm;
 }
 /**
@@ -948,11 +1024,9 @@ static inline promise<void> any(const promise<Args>&... arg) {
  * @return promise<void> 回调用 Promise。
  */
 template <typename... Args>
-static inline promise<void> race(const promise<Args>&... arg) {
-  promise<void> pm;
-  detail::_promise_race<std::tuple<promise<Args>...>, sizeof...(Args),
-                        sizeof...(Args) -
-                            1>::apply(std::forward_as_tuple(arg...), pm);
+static inline promise<awacorn::any> race(const promise<Args>&... args) {
+  promise<awacorn::any> pm;
+  detail::_promise_race::apply(pm, args...);
   return pm;
 }
 /**
@@ -965,13 +1039,14 @@ static inline promise<void> race(const promise<Args>&... arg) {
  * @return promise<void> 回调用 Promise。
  */
 template <typename... Args>
-static inline promise<void> all_settled(const promise<Args>&... arg) {
-  promise<void> pm;
-  std::shared_ptr<size_t> done_count = std::shared_ptr<size_t>(new size_t(0));
-  detail::_promise_allSettled<std::tuple<promise<Args>...>, sizeof...(Args),
-                              sizeof...(Args) -
-                                  1>::apply(std::forward_as_tuple(arg...),
-                                            done_count, pm);
+static inline promise<std::tuple<promise<Args>...>> all_settled(
+    const promise<Args>&... args) {
+  using ResultType = std::tuple<promise<Args>...>;
+  promise<ResultType> pm;
+  std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
+  std::shared_ptr<size_t> done_count = std::make_shared<size_t>(0);
+  detail::_promise_all_settled<ResultType, sizeof...(Args) - 1>::apply(
+      pm, result, done_count, args...);
   return pm;
 }
 }  // namespace gather
