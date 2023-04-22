@@ -86,7 +86,7 @@ int main() {
 
 - 无论是 `then`、`error` 还是 `finally` 方法都只接受一个回调函数。
   - 回调函数可以返回一个值或者 `Promise`，用于传递给下一个 `then`/`error` (见下)。
-    - 返回 `Promise` 表示下一个回调将在**返回的 `Promise` 结束(_解决或拒绝_)**后被执行。
+    - 返回 `Promise` 表示下一个回调将在**返回的 `Promise` 结束**(_解决或拒绝_)后被执行。
   - 当然，抛出错误可以用 `return awacorn::reject` 或者 `throw awacorn::any`。当然返回也可以 `return awacorn::resolve` 或者 `return value` (使用 `resolve` / `reject` 的方式用于返回 `Promise` 时统一返回类型)。
 - 这三个方法都返回一个新的 `Promise` 用于处理返回值。
   - :beginner: 比如匿名函数返回 `int` 或者 `promise<int>`，方法就会返回 `promise<int>`。
