@@ -140,25 +140,26 @@ int main() {
 
 请参照 [Promise.any](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/any)。
 
-- :warning: `any` 不收集值，所以返回值是 `promise<void>`。
-- 在全部 `Promise` 都被拒绝的情况下会以最后一个被拒绝 `Promise` 的错误拒绝返回的 `Promise`。
+- :warning: `any` 是弱类型的，所以返回值是 `promise<awacorn::any>` (**未来可能会变更为 variant，不稳定**)。
+- :warning: 在全部 `Promise` 都被拒绝的情况下会直接使用最后一个错误拒绝返回的 `Promise`，而不是使用 `AggregateError` (**未来可能会添加，不稳定**)。
 
 ### `race`
 
 请参照 [Promise.race](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/race)。
 
-- :warning: `race` 不收集值，所以返回值是 `promise<void>`。
-- 对于 `race` 函数，无论传入的 `Promise` 是否错误都会正常返回。
+- :warning: `race` 是弱类型的，所以返回值是 `promise<awacorn::any>` (**未来可能会变更为 variant，不稳定**)。
 
 ### `all_settled`
 
-请参照 [Promise.allSelettled](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/allSettled)。
+请参照 [Promise.allSettled](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/allSettled)。
 
-- :warning: `all_settled` 不收集值 (可能只是我懒得做? **在未来可能会加入这个功能，属于不兼容更新，请注意及时兼容。**)，所以返回值是 `promise<void>`。
+- :warning: `all_settled` 使用 `std::tuple` 来承载返回值。
 - 对于 `all_settled` 函数，无论传入的 `Promise` 是否错误都会正常返回。
 
 ## `awacorn::any`
 
-用于兼容 C++ 11 的 `any` 实现。在 C++ 17 下是对 `std::any` 的封装。
+用于兼容 C++ 11 的 `any` 实现。在 C++ 17 下是 `std::any` 的别名。
 
 实现了几乎所有的 `std::any` 接口 (`awacorn::any_cast` 用于转换)，请尽情使用。
+
+:warning: 注意: 在 C++ 11 上请确保使用 **awacorn::any** 而不是其它的 any 实现，因为使用其它的 any 容器可能导致跟 awacorn 不兼容。如果实在是要使用指定实现，请**更改 Awacorn 源代码**。
