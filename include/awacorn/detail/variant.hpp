@@ -14,16 +14,12 @@ template <typename... Args>
 struct _max_sizeof : public std::integral_constant<size_t, 0> {};
 template <typename T>
 struct _max_sizeof<T> : public std::integral_constant<size_t, sizeof(T)> {};
-template <typename T, typename T2>
-struct _max_sizeof<T, T2>
-    : public std::integral_constant<
-          size_t, (sizeof(T) > sizeof(T2) ? sizeof(T) : sizeof(T2))> {};
 template <typename T, typename T2, typename... Args>
 struct _max_sizeof<T, T2, Args...>
     : public std::integral_constant<
-          size_t, (_max_sizeof<T, T2>::value > _max_sizeof<Args...>::value
-                       ? _max_sizeof<T, T2>::value
-                       : _max_sizeof<Args...>::value)> {};
+          size_t, (sizeof(T) > sizeof(T2) ? _max_sizeof<T, Args...>::value
+                                          : _max_sizeof<T2, Args...>::value)> {
+};
 /**
  * @brief 编译时计算给定类型中对齐大小最大的一个。
  *
@@ -33,16 +29,13 @@ template <typename... Args>
 struct _max_alignof : public std::integral_constant<size_t, 0> {};
 template <typename T>
 struct _max_alignof<T> : public std::integral_constant<size_t, alignof(T)> {};
-template <typename T, typename T2>
-struct _max_alignof<T, T2>
-    : public std::integral_constant<
-          size_t, (alignof(T) > alignof(T2) ? alignof(T) : alignof(T2))> {};
 template <typename T, typename T2, typename... Args>
 struct _max_alignof<T, T2, Args...>
-    : public std::integral_constant<
-          size_t, (_max_alignof<T, T2>::value > _max_alignof<Args...>::value
-                       ? _max_alignof<T, T2>::value
-                       : _max_alignof<Args...>::value)> {};
+    : public std::integral_constant<size_t,
+                                    (alignof(T) > alignof(T2)
+                                         ? _max_alignof<T, Args...>::value
+                                         : _max_alignof<T2, Args...>::value)> {
+};
 /**
  * @brief 内部实现类，用于在编译时将类型转换为下标。
  *
