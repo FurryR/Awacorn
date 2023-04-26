@@ -67,6 +67,17 @@ template <typename TargetT, typename... Args>
 struct _type_index
     : public std::integral_constant<
           size_t, __type_index_helper<0, TargetT, Args...>::value> {};
+template <size_t current, size_t idx, typename... Args>
+struct __index_type_helper;
+template <size_t current, size_t idx, typename T, typename... Args>
+struct __index_type_helper<current, idx, T, Args...>
+    : public std::enable_if<
+          current <= idx,
+          std::conditional<idx == current, T,
+                           __index_type_helper<current, idx, T, Args>>::type>::
+          type {};
+template <size_t idx, typename... Args>
+struct _index_type : public __index_type_helper<0, sizeof...(idx), Args...> {};
 };  // namespace detail
 template <typename... T>
 struct variant {
