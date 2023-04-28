@@ -92,35 +92,4 @@ int main() {
       x.next();
     });
   }
-  // test awacorn::async_generator<int, void>
-  {
-    auto x = awacorn::async_generator<int, void>(
-        [](awacorn::async_generator<int, void>::context* ctx) {
-          ctx->await(awacorn::resolve());
-          ctx->await(awacorn::resolve(1));
-          return 1;
-        });
-    assert((x.status() == awacorn::async_generator<int, void>::Pending));
-    x.next().then([&](int) {
-      std::cout
-          << "  "
-          << "[7] √ awacorn::async_generator<int, void> resolve test passed"
-          << std::endl;
-    });
-  }
-  // test awacorn::async_generator<void, void>
-  {
-    auto x = awacorn::async_generator<void, void>(
-        [](awacorn::async_generator<void, void>::context* ctx) {
-          ctx->await(awacorn::resolve());
-          // ctx->await(awacorn::resolve(1));
-        });
-    assert((x.status() == awacorn::async_generator<void, void>::Pending));
-    x.next().then([&]() {
-      std::cout
-          << "  "
-          << "[8] √ awacorn::async_generator<void, void> resolve test passed"
-          << std::endl;
-    });
-  }
 }

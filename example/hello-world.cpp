@@ -1,7 +1,7 @@
 #include <iostream>
 
+#include "awacorn/async.hpp"
 #include "awacorn/event.hpp"
-#include "awacorn/generator.hpp"
 
 awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
                                           const std::string& str) {
@@ -18,12 +18,10 @@ awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
 }
 int main() {
   awacorn::event_loop ev;
-  awacorn::async_generator<void>(
-      [&](awacorn::async_generator<void>::context* ctx) -> void {
-        std::cout << "Hello World. Input your name" << std::endl;
-        std::string name = ctx->await(async_input(&ev, "Your name: "));
-        std::cout << "Welcome, " << name << "!" << std::endl;
-      })
-      .next();
+  awacorn::async([&](awacorn::context& ctx) -> void {
+    std::cout << "Hello World. Input your name" << std::endl;
+    std::string name = ctx >> async_input(&ev, "Your name: ");
+    std::cout << "Welcome, " << name << "!" << std::endl;
+  });
   ev.start();
 }

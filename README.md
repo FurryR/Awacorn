@@ -7,13 +7,12 @@
 ```cpp
 int main() {
   awacorn::event_loop ev;
-  awacorn::async_generator<void>(
-      [&](awacorn::async_generator<void>::context* ctx) -> void {
+  awacorn::async(
+      [&](awacorn::context& ctx) -> void {
         std::cout << "Hello World. Input your name" << std::endl;
-        std::string name = ctx->await(async_input(&ev, "Your name: "));
+        std::string name = ctx >> async_input(&ev, "Your name: ");
         std::cout << "Welcome, " << name << "!" << std::endl;
-      })
-      .next();
+      });
   ev.start();
 }
 ```
@@ -48,12 +47,12 @@ Awacorn 和通常的 C++ 协程有什么区别？
 表现为以下形式：
 
 1. [x] Awacorn 的协程不和调度器绑定。
-   - :v: 你可以将 `promise` 和 `generator` 单独拿出来使用，他们并不依赖 `event`。
+   - :v: 你可以将 `promise` 和 `async` 单独拿出来使用，他们并不依赖 `event`。
 2. [x] Awacorn 是基于 `await`/`async` 的。
    - :x: 一般的协程库会 **劫持** 你的函数调用，这样你就感觉不到你在用协程。比如 **libgo** 或者 **libco**。缺点就是 **channel 泛滥**，非常难看。
    - :white_check_mark: Awacorn 基于 `await`/`async` 模式，且不劫持任何系统调用。你可以自己实现异步接口。
 3. [x] Awacorn 活用了 C++ 11 的元编程特性，以及智能指针。
-   - :mag: 参见 `promise` 及 `generator` 的返回值及 `await` 处理。
+   - :mag: 参见 `promise` 及 `async` 的返回值及 `await` 处理。
 
 ## 编译
 
@@ -84,7 +83,7 @@ Awacorn 和通常的 C++ 协程有什么区别？
 | ----------- | ----------------------------------------------- | ----------------------------------- | --------------------------------------- |
 | `event`     | Awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: <br>[event](doc/event.md)       |
 | `promise`   | 类似于 Javascript 的 Promise，低成本 & 强类型。 | void                                | :wolf: <br>[promise](doc/promise.md)    |
-| `generator` | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: <br>[generator](doc/generator.md) |
+| `async` | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: <br>[async](doc/async.md) |
 | `function`  | Awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: <br>[function](doc/function.md)  |
 | `capture`   | Awacorn 采用的内部万能捕获实现。                | void                                | :ox: <br>[capture](doc/capture.md)      |
 
