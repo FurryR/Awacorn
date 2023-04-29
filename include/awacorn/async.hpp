@@ -6,16 +6,16 @@
  * Copyright(c) 凌 2023.
  */
 #if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)
-#if __has_include(<boost/coroutine2/coroutine.hpp>)
+#if __has_include(<boost/context/continuation.hpp>)
 #define AWACORN_USE_BOOST
 #elif __has_include(<ucontext.h>)
 #define AWACORN_USE_UCONTEXT
 #else
-#error Neither <boost/coroutine2/coroutine.hpp> nor <ucontext.h> is found.
+#error Neither <boost/context/continuation.hpp> nor <ucontext.h> is found.
 #endif
 #endif
 #if defined(AWACORN_USE_BOOST)
-#include <boost/coroutine2/coroutine.hpp>
+#include <boost/context/continuation.hpp>
 #elif defined(AWACORN_USE_UCONTEXT)
 #ifdef __APPLE__
 #define _XOPEN_SOURCE
@@ -53,15 +53,19 @@ struct _async_fn;
  */
 class context {
 #if defined(AWACORN_USE_BOOST)
-  context(void (*fn)(void*), void* arg, size_t = 0)
+  context(void (*fn)(void*), void* arg, size_t stack_size = 0)
       : _status(detail::_async_state_t::Pending),
-        _pullfn([this, fn,
-                 arg](boost::coroutines2::coroutine<void>::push_type& pushfn) {
-          _pushfn = &pushfn;
-          (*_pushfn)();
-          fn(arg);
-        }),
-        _push_or_pull(false) {}
+        _ctx(boost::context::callcc(
+            std::allocator_arg,
+            boost::context::fixedsize_stack(
+                stack_size ? stack_size
+                           : boost::context::stack_traits::default_size()),
+            [this, fn, arg](boost::context::continuation&& ctx) {
+              _ctx = std::move(ctx);
+              _ctx = _ctx.resume();
+              fn(arg);
+              return std::move(_ctx);
+            })) {}
 #elif defined(AWACORN_USE_UCONTEXT)
   context(void (*fn)(void*), void* arg, size_t stack_size = 0)
       : _status(detail::_async_state_t::Pending),
@@ -82,7 +86,13 @@ class context {
 #endif
  public:
   context(const context&) = delete;
-  // await implementation
+  /**
+   * @brief 等待 promise 完成并返回 promise 的结果值。
+   *
+   * @tparam T promise 的结果类型。
+   * @param value promise 本身。
+   * @return T promise 的结果。
+   */
   template <typename T>
   T operator>>(const promise<T>& value) {
     if (_status != detail::_async_state_t::Active)
@@ -111,13 +121,7 @@ class context {
  private:
   void resume() {
 #if defined(AWACORN_USE_BOOST)
-    if (_push_or_pull) {
-      _push_or_pull = false;
-      (*_pushfn)();
-    } else {
-      _push_or_pull = true;
-      _pullfn();
-    }
+    _ctx = _ctx.resume();
 #elif defined(AWACORN_USE_UCONTEXT)
     ucontext_t orig = _ctx;
     swapcontext(&_ctx, &orig);
@@ -129,9 +133,7 @@ class context {
   bool _failbit;
   any _result;
 #if defined(AWACORN_USE_BOOST)
-  boost::coroutines2::coroutine<void>::pull_type _pullfn;
-  boost::coroutines2::coroutine<void>::push_type* _pushfn;
-  bool _push_or_pull;
+  boost::context::continuation _ctx;
 #elif defined(AWACORN_USE_UCONTEXT)
   ucontext_t _ctx;
   std::unique_ptr<char, void (*)(char*)> _stack;
@@ -144,12 +146,6 @@ class context {
   friend struct detail::_basic_async_fn;
 };
 namespace detail {
-/**
- * @brief 生成器成员，用于实现智能生命周期。
- *
- * @tparam Fn 函数类型。
- * @tparam Context 上下文类型。
- */
 template <typename Fn>
 struct _basic_async_fn {
  protected:
@@ -161,11 +157,6 @@ struct _basic_async_fn {
       : ctx(run_fn, args, stack_size), fn(std::forward<U>(fn)) {}
   _basic_async_fn(const _basic_async_fn& v) = delete;
 };
-/**
- * @brief 不中断值的异步生成器。
- *
- * @tparam RetType 返回类型。
- */
 template <typename RetType>
 struct _async_fn : public _basic_async_fn<RetType(context&)>,
                    public std::enable_shared_from_this<_async_fn<RetType>> {
@@ -229,9 +220,6 @@ struct _async_fn : public _basic_async_fn<RetType(context&)>,
     self->ctx.resume();
   }
 };
-/**
- * @brief 不中断值也不返回值的异步生成器。
- */
 template <>
 struct _async_fn<void> : public _basic_async_fn<void(context&)>,
                          public std::enable_shared_from_this<_async_fn<void>> {
@@ -296,6 +284,15 @@ struct _async_fn<void> : public _basic_async_fn<void(context&)>,
   }
 };
 };  // namespace detail
+/**
+ * @brief 进入异步函数上下文。
+ *
+ * @tparam U 函数类型。
+ * @param fn 函数。
+ * @param stack_size 可选，栈的大小(如果可用)。
+ * @return promise<decltype(fn(std::declval<context&>()))> 用于取得函数返回值的
+ * promise 对象。
+ */
 template <typename U>
 auto async(U&& fn, size_t stack_size = 0)
     -> promise<decltype(fn(std::declval<context&>()))> {

@@ -47,7 +47,7 @@ class function<Ret(Args...)> {
   function() = default;
   /**
    * @brief 由可调用对象构造函数对象。
-   * 
+   *
    * @tparam U 可调用对象的类型
    * @param fn 可调用对象的实例。
    */
@@ -66,13 +66,13 @@ class function<Ret(Args...)> {
   }
   /**
    * @brief 将此函数对象跟 fn 交换。
-   * 
+   *
    * @param fn 目标函数对象。
    */
   inline void swap(function& fn) noexcept { std::swap(ptr, fn.ptr); }
   /**
    * @brief 判断函数是否已被初始化。
-   * 
+   *
    * @return true 函数已被初始化
    * @return false 函数未被初始化
    */
@@ -80,7 +80,7 @@ class function<Ret(Args...)> {
   /**
    * @brief 获得目标类型的运行时类型信息 (RTTI)。
    * @warning 如果函数未被初始化则返回 typeid(void)。
-   * 
+   *
    * @return const std::type_info& 运行时类型信息
    */
   inline const std::type_info& target_type() const noexcept {
@@ -102,7 +102,7 @@ class function<Ret(Args...)> {
   }
   /**
    * @brief 调用函数。
-   * 
+   *
    * @param args 参数列表。
    * @return Ret 函数的返回值。
    */

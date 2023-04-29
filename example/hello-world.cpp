@@ -18,7 +18,7 @@ awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
 }
 int main() {
   awacorn::event_loop ev;
-  awacorn::async([&](awacorn::context& ctx) -> void {
+  awacorn::async([&](awacorn::context& ctx) {
     std::cout << "Hello World. Input your name" << std::endl;
     std::string name = ctx >> async_input(&ev, "Your name: ");
     std::cout << "Welcome, " << name << "!" << std::endl;

@@ -7,16 +7,16 @@
  * Copyright(c) 凌 2023.
  */
 #if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)
-#if __has_include(<boost/coroutine2/coroutine.hpp>)
+#if __has_include(<boost/context/continuation.hpp>)
 #define AWACORN_USE_BOOST
 #elif __has_include(<ucontext.h>)
 #define AWACORN_USE_UCONTEXT
 #else
-#error Neither <boost/coroutine2/coroutine.hpp> nor <ucontext.h> is found.
+#error Neither <boost/context/continuation.hpp> nor <ucontext.h> is found.
 #endif
 #endif
 #if defined(AWACORN_USE_BOOST)
-#include <boost/coroutine2/coroutine.hpp>
+#include <boost/context/continuation.hpp>
 #elif defined(AWACORN_USE_UCONTEXT)
 #ifdef __APPLE__
 #define _XOPEN_SOURCE
@@ -260,16 +260,19 @@ template <typename State>
 struct basic_context {
  protected:
 #if defined(AWACORN_USE_BOOST)
-  basic_context(void (*fn)(void*), void* arg, size_t = 0)
-      : _cancelling(false),
-        _status(State::Pending),
-        _pullfn([this, fn,
-                 arg](boost::coroutines2::coroutine<void>::push_type& pushfn) {
-          _pushfn = &pushfn;
-          (*_pushfn)();
-          fn(arg);
-        }),
-        _push_or_pull(false) {}
+  basic_context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+      : _status(State::Pending),
+        _ctx(boost::context::callcc(
+            std::allocator_arg,
+            boost::context::fixedsize_stack(
+                stack_size ? stack_size
+                           : boost::context::stack_traits::default_size()),
+            [this, fn, arg](boost::context::continuation&& ctx) {
+              _ctx = std::move(ctx);
+              _ctx = _ctx.resume();
+              fn(arg);
+              return std::move(_ctx);
+            })) {}
 #elif defined(AWACORN_USE_UCONTEXT)
   basic_context(void (*fn)(void*), void* arg, size_t stack_size = 0)
       : _cancelling(false),
@@ -339,13 +342,7 @@ struct basic_context {
   };
   void resume() {
 #if defined(AWACORN_USE_BOOST)
-    if (_push_or_pull) {
-      _push_or_pull = false;
-      (*_pushfn)();
-    } else {
-      _push_or_pull = true;
-      _pullfn();
-    }
+    _ctx = _ctx.resume();
 #elif defined(AWACORN_USE_UCONTEXT)
     ucontext_t orig = _ctx;
     swapcontext(&_ctx, &orig);
@@ -358,9 +355,7 @@ struct basic_context {
 
  private:
 #if defined(AWACORN_USE_BOOST)
-  boost::coroutines2::coroutine<void>::pull_type _pullfn;
-  boost::coroutines2::coroutine<void>::push_type* _pushfn;
-  bool _push_or_pull;
+  boost::context::continuation _ctx;
 #elif defined(AWACORN_USE_UCONTEXT)
   ucontext_t _ctx;
   std::unique_ptr<char, void (*)(char*)> _stack;
@@ -418,13 +413,15 @@ struct generator {
      *
      * @param value 中断值。
      */
-    inline void yield(const YieldType& value) {
+    inline context& operator<<(const YieldType& value) {
       context::__yield_impl::template apply<RetType, YieldType>(this, value,
                                                                 &this->_result);
+      return *this;
     }
-    inline void yield(YieldType&& value) {
+    inline context& operator<<(YieldType&& value) {
       context::__yield_impl::template apply<RetType, YieldType>(
           this, std::move(value), &this->_result);
+      return *this;
     }
     context(void (*fn)(void*), void* arg, size_t stack_size = 0)
         : detail::basic_context<state_t>(fn, arg, stack_size) {}
@@ -435,7 +432,7 @@ struct generator {
     any _result;
   };
   struct _generator
-      : public detail::basic_generator<RetType(context*), context> {
+      : public detail::basic_generator<RetType(context&), context> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -478,11 +475,11 @@ struct generator {
    private:
     template <typename U>
     explicit _generator(U&& fn, size_t stack_size = 0)
-        : detail::basic_generator<RetType(context*), context>(
+        : detail::basic_generator<RetType(context&), context>(
               std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
     static void run_fn(_generator* self) {
       try {
-        self->ctx._result = self->fn(&self->ctx);
+        self->ctx._result = self->fn(self->ctx);
         self->ctx._status = Returned;
       } catch (const cancel_error&) {
         self->ctx._status = Cancelled;
@@ -553,13 +550,15 @@ struct generator<void, YieldType> {
      *
      * @param value 中断值。
      */
-    inline void yield(const YieldType& value) {
+    inline context& operator<<(const YieldType& value) {
       context::__yield_impl::template apply<void, YieldType>(this, value,
                                                              &this->_result);
+      return *this;
     }
-    inline void yield(YieldType&& value) {
+    inline context& operator<<(YieldType&& value) {
       context::__yield_impl::template apply<void, YieldType>(
           this, std::move(value), &this->_result);
+      return *this;
     }
     context(void (*fn)(void*), void* arg, size_t stack_size = 0)
         : detail::basic_context<state_t>(fn, arg, stack_size) {}
@@ -569,7 +568,7 @@ struct generator<void, YieldType> {
    private:
     any _result;
   };
-  struct _generator : public detail::basic_generator<void(context*), context> {
+  struct _generator : public detail::basic_generator<void(context&), context> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -610,11 +609,11 @@ struct generator<void, YieldType> {
    private:
     template <typename U>
     explicit _generator(U&& fn, size_t stack_size = 0)
-        : detail::basic_generator<void(context*), context>(
+        : detail::basic_generator<void(context&), context>(
               std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
     static void run_fn(_generator* self) {
       try {
-        self->fn(&self->ctx);
+        self->fn(self->ctx);
         self->ctx._status = Returned;
       } catch (const cancel_error&) {
         self->ctx._status = Cancelled;
@@ -687,13 +686,15 @@ struct async_generator {
      *
      * @param value 中断值。
      */
-    inline void yield(const YieldType& value) {
+    inline context& operator<<(const YieldType& value) {
       context::__yield_impl::template apply<RetType, YieldType>(this, value,
                                                                 &this->_result);
+      return *this;
     }
-    inline void yield(YieldType&& value) {
+    inline context& operator<<(YieldType&& value) {
       context::__yield_impl::template apply<RetType, YieldType>(
           this, std::move(value), &this->_result);
+      return *this;
     }
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
@@ -704,7 +705,7 @@ struct async_generator {
      * @return T Promise 的值。
      */
     template <typename T>
-    inline T await(const promise<T>& value) {
+    inline T operator>>(const promise<T>& value) {
       return context::__await_impl::apply(this, value, &this->_result,
                                           &this->_failbit);
     }
@@ -719,7 +720,7 @@ struct async_generator {
     bool _failbit;
   };
   struct _generator
-      : public detail::basic_generator<RetType(context*), context>,
+      : public detail::basic_generator<RetType(context&), context>,
         public std::enable_shared_from_this<_generator> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
@@ -747,9 +748,11 @@ struct async_generator {
                      .then([pm](const result_t<RetType, YieldType>& res) {
                        pm.resolve(res);
                      })
-                     .error([pm](const std::exception_ptr& err) { pm.reject(err); });
+                     .error([pm](const std::exception_ptr& err) {
+                       pm.reject(err);
+                     });
                }
-              pm.reject(std::make_exception_ptr(cancel_error()));
+               pm.reject(std::make_exception_ptr(cancel_error()));
              })
               .error([ref, pm](const std::exception_ptr& err) {
                 if (std::shared_ptr<_generator> tmp = ref.lock()) {
@@ -759,9 +762,11 @@ struct async_generator {
                       .then([pm](const result_t<RetType, YieldType>& res) {
                         pm.resolve(res);
                       })
-                      .error([pm](const std::exception_ptr& err) { pm.reject(err); });
+                      .error([pm](const std::exception_ptr& err) {
+                        pm.reject(err);
+                      });
                 }
-               pm.reject(std::make_exception_ptr(cancel_error()));
+                pm.reject(std::make_exception_ptr(cancel_error()));
               });
           return pm;
         } else if (this->ctx._status == Yielded) {
@@ -780,7 +785,8 @@ struct async_generator {
         return resolve(result_t<RetType, YieldType>::generate_ret(
             any_cast<RetType>(this->ctx._result)));
       } else if (this->ctx._status == Throwed) {
-        return reject<result_t<RetType, YieldType>>(any_cast<std::exception_ptr>(this->ctx._result));
+        return reject<result_t<RetType, YieldType>>(
+            any_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }
@@ -798,11 +804,11 @@ struct async_generator {
     }
     template <typename U>
     explicit _generator(U&& fn, size_t stack_size = 0)
-        : detail::basic_generator<RetType(context*), context>(
+        : detail::basic_generator<RetType(context&), context>(
               std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
     static void run_fn(_generator* self) {
       try {
-        self->ctx._result = self->fn(&self->ctx);
+        self->ctx._result = self->fn(self->ctx);
         self->ctx._status = Returned;
       } catch (const cancel_error&) {
         self->ctx._status = Cancelled;
@@ -876,13 +882,15 @@ struct async_generator<void, YieldType> {
      *
      * @param value 中断值。
      */
-    inline void yield(const YieldType& value) {
+    inline context& operator<<(const YieldType& value) {
       context::__yield_impl::template apply<void, YieldType>(this, value,
                                                              &this->_result);
+      return *this;
     }
-    inline void yield(YieldType&& value) {
+    inline context& operator<<(YieldType&& value) {
       context::__yield_impl::template apply<void, YieldType>(
           this, std::move(value), &this->_result);
+      return *this;
     }
     /**
      * @brief 等待一个 Promise 完成，并取得 Promise
@@ -893,7 +901,7 @@ struct async_generator<void, YieldType> {
      * @return T Promise 的值。
      */
     template <typename T>
-    inline T await(const promise<T>& value) {
+    inline T operator>>(const promise<T>& value) {
       return context::__await_impl::apply(this, value, &this->_result,
                                           &this->_failbit);
     }
@@ -907,7 +915,7 @@ struct async_generator<void, YieldType> {
     any _result;
     bool _failbit;
   };
-  struct _generator : public detail::basic_generator<void(context*), context>,
+  struct _generator : public detail::basic_generator<void(context&), context>,
                       public std::enable_shared_from_this<_generator> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
@@ -935,9 +943,11 @@ struct async_generator<void, YieldType> {
                      .then([pm](const result_t<void, YieldType>& res) {
                        pm.resolve(res);
                      })
-                     .error([pm](const std::exception_ptr& err) { pm.reject(err); });
+                     .error([pm](const std::exception_ptr& err) {
+                       pm.reject(err);
+                     });
                }
-              pm.reject(std::make_exception_ptr(cancel_error()));
+               pm.reject(std::make_exception_ptr(cancel_error()));
              })
               .error([ref, pm](const std::exception_ptr& err) {
                 if (std::shared_ptr<_generator> tmp = ref.lock()) {
@@ -947,9 +957,11 @@ struct async_generator<void, YieldType> {
                       .then([pm](const result_t<void, YieldType>& res) {
                         pm.resolve(res);
                       })
-                      .error([pm](const std::exception_ptr& err) { pm.reject(err); });
+                      .error([pm](const std::exception_ptr& err) {
+                        pm.reject(err);
+                      });
                 }
-               pm.reject(std::make_exception_ptr(cancel_error()));
+                pm.reject(std::make_exception_ptr(cancel_error()));
               });
           return pm;
         } else if (this->ctx._status == Yielded) {
@@ -958,7 +970,8 @@ struct async_generator<void, YieldType> {
         } else if (this->ctx._status == Returned) {
           return resolve(result_t<void, YieldType>::generate_ret());
         } else if (this->ctx._status == Cancelled) {
-          return reject<result_t<void, YieldType>>(std::make_exception_ptr(cancel_error()));
+          return reject<result_t<void, YieldType>>(
+              std::make_exception_ptr(cancel_error()));
         }
         return reject<result_t<void, YieldType>>(
             any_cast<std::exception_ptr>(this->ctx._result));
@@ -984,11 +997,11 @@ struct async_generator<void, YieldType> {
     }
     template <typename U>
     explicit _generator(U&& fn, size_t stack_size = 0)
-        : detail::basic_generator<void(context*), context>(
+        : detail::basic_generator<void(context&), context>(
               std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
     static void run_fn(_generator* self) {
       try {
-        self->fn(&self->ctx);
+        self->fn(self->ctx);
         self->ctx._status = Returned;
       } catch (const cancel_error&) {
         self->ctx._status = Cancelled;

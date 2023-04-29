@@ -39,7 +39,8 @@ struct basic_promise {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()(val);
           tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -61,7 +62,8 @@ struct basic_promise {
         try {
           PromiseT<void> tmp = arg_fn.borrow()(val);
           tmp.then([t]() -> void { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -83,7 +85,8 @@ struct basic_promise {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()();
           tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -103,7 +106,8 @@ struct basic_promise {
         try {
           PromiseT<void> tmp = arg_fn.borrow()();
           tmp.then([t]() -> void { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -231,7 +235,8 @@ struct basic_promise {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()(val);
           tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -250,7 +255,8 @@ struct basic_promise {
         try {
           PromiseT<void> tmp = arg_fn.borrow()(val);
           tmp.then([t]() -> void { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -322,7 +328,8 @@ struct basic_promise {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()();
           tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -341,7 +348,8 @@ struct basic_promise {
         try {
           PromiseT<void> tmp = arg_fn.borrow()();
           tmp.then([t]() -> void { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.error(
+              [t](const std::exception_ptr& err) -> void { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -603,7 +611,9 @@ struct promise : public detail::basic_promise {
    *
    * @param err 异常。
    */
-  inline void reject(const std::exception_ptr& value) const { pm->reject(value); }
+  inline void reject(const std::exception_ptr& value) const {
+    pm->reject(value);
+  }
   /**
    * @brief 获得Promise的状态。
    *
@@ -768,7 +778,9 @@ class promise<void> : public detail::basic_promise {
    *
    * @param err 异常。
    */
-  inline void reject(const std::exception_ptr& value) const { pm->reject(value); }
+  inline void reject(const std::exception_ptr& value) const {
+    pm->reject(value);
+  }
   /**
    * @brief 获得Promise的状态。
    *

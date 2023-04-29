@@ -8,9 +8,9 @@ int main() {
   // test awacorn::generator<int, int>
   {
     auto x = awacorn::generator<int, int>(
-        [](awacorn::generator<int, int>::context* ctx) {
+        [](awacorn::generator<int, int>::context& ctx) {
           try {
-            ctx->yield(1);
+            ctx << 1;
           } catch (const awacorn::cancel_error&) {
             std::cout << "  "
                       << "[1] √ awacorn::generator<int, int> cancel test passed"
@@ -25,9 +25,9 @@ int main() {
   // test awacorn::generator<void, int>
   {
     auto x = awacorn::generator<void, int>(
-        [](awacorn::generator<void, int>::context* ctx) {
+        [](awacorn::generator<void, int>::context& ctx) {
           try {
-            ctx->yield(1);
+            ctx << 1;
           } catch (const awacorn::cancel_error&) {
             std::cout
                 << "  "
@@ -42,11 +42,11 @@ int main() {
   // test awacorn::async_generator<int, int>
   {
     auto x = awacorn::async_generator<int, int>(
-        [](awacorn::async_generator<int, int>::context* ctx) {
-          ctx->await(awacorn::resolve());
-          ctx->yield(1);
+        [](awacorn::async_generator<int, int>::context& ctx) {
+          ctx >> awacorn::resolve();
+          ctx << 1;
           try {
-            ctx->await(awacorn::promise<int>());  // never resolves
+            ctx >> awacorn::promise<int>();  // never resolves
           } catch (const awacorn::cancel_error&) {
             std::cout
                 << "  "
@@ -69,11 +69,11 @@ int main() {
   // test awacorn::async_generator<void, int>
   {
     auto x = awacorn::async_generator<void, int>(
-        [](awacorn::async_generator<void, int>::context* ctx) {
-          ctx->await(awacorn::resolve());
-          ctx->yield(1);
+        [](awacorn::async_generator<void, int>::context& ctx) {
+          ctx >> awacorn::resolve();
+          ctx << 1;
           try {
-            ctx->await(awacorn::promise<int>());  // never resolves
+            ctx >> awacorn::promise<int>();  // never resolves
           } catch (const awacorn::cancel_error&) {
             std::cout << "  "
                       << "[6] √ awacorn::async_generator<void, int> cancel "

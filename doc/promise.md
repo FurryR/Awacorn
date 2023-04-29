@@ -31,18 +31,18 @@
 
 :question: 那么 Awacorn 为什么要重新造一遍轮子呢？以下是这四个库的不同点对比。
 
-| Awacorn                                 | folly                               | promise-cpp                             | boost-thread                                 |
-| --------------------------------------- | ----------------------------------- | --------------------------------------- | -------------------------------------------- |
-| :x: 不适用                              | :x: 不适用                          | :white_check_mark: 符合 A+ 标准(~~伪~~) | :x: 不适用                                   |
-| :white_check_mark: 编译时强类型支持     | :white_check_mark: 编译时强类型支持 | :x: 弱类型(伪强类型)支持                | :white_check_mark: 编译时强类型支持          |
-| :x: 弱类型异常处理                      | :white_check_mark: 强类型异常处理   | :x: 弱类型异常处理                      | :x: 基于 `std::exception_ptr` 的基本异常处理 |
-| :white_check_mark: 支持多次设定回调函数 | :x: 不支持多次设定回调函数          | :x: 不支持多次设定回调函数              | :x: 不支持多次设定回调函数                   |
-| :x: 线程不安全                          | :white_check_mark: 线程安全         | :white_check_mark: 线程安全             | :white_check_mark: 线程安全                  |
-| :white_check_mark: 不绑定事件循环       | :white_check_mark: 不绑定事件循环   | :white_check_mark: 不绑定事件循环       | :white_check_mark: 不绑定事件循环            |
-| :white_check_mark: 完全并发组件支持     | :x: 部分并发组件支持                | :x: 部分并发组件支持                    | :x: 部分并发组件支持                         |
-| :white_check_mark: 回调函数生命周期确定 | :x: 未定义                          | :x: 未定义                              | :x: 未定义                                   |
-| :white_check_mark: 可中断               | :white_check_mark: 可中断           | :x: 不可中断                            | :white_check_mark: 可中断                    |
-| :white_check_mark: Header-only          | :x: 不适用                          | :white_check_mark: Header-only          | :x: 不适用                                   |
+| Awacorn                                 | folly                               | promise-cpp                             | boost-thread                        |
+| --------------------------------------- | ----------------------------------- | --------------------------------------- | ----------------------------------- |
+| :x: 不适用                              | :x: 不适用                          | :white_check_mark: 符合 A+ 标准(~~伪~~) | :x: 不适用                          |
+| :white_check_mark: 编译时强类型支持     | :white_check_mark: 编译时强类型支持 | :x: 弱类型(伪强类型)支持                | :white_check_mark: 编译时强类型支持 |
+| :white_check_mark: 强类型异常处理       | :white_check_mark: 强类型异常处理   | :white_check_mark: 强类型异常处理       | :white_check_mark: 强类型异常处理   |
+| :white_check_mark: 支持多次设定回调函数 | :x: 不支持多次设定回调函数          | :x: 不支持多次设定回调函数              | :x: 不支持多次设定回调函数          |
+| :x: 线程不安全                          | :white_check_mark: 线程安全         | :white_check_mark: 线程安全             | :white_check_mark: 线程安全         |
+| :white_check_mark: 不绑定事件循环       | :white_check_mark: 不绑定事件循环   | :white_check_mark: 不绑定事件循环       | :white_check_mark: 不绑定事件循环   |
+| :white_check_mark: 完全并发组件支持     | :x: 部分并发组件支持                | :x: 部分并发组件支持                    | :x: 部分并发组件支持                |
+| :white_check_mark: 回调函数生命周期确定 | :x: 未定义                          | :x: 未定义                              | :x: 未定义                          |
+| :white_check_mark: 可中断               | :white_check_mark: 可中断           | :x: 不可中断                            | :white_check_mark: 可中断           |
+| :white_check_mark: Header-only          | :x: 不适用                          | :white_check_mark: Header-only          | :x: 不适用                          |
 
 :trophy: 综合来看，Awacorn `Promise` 最适用于当前场景，并且十分容易上手，故 Awacorn 采用 `Promise`。
 
@@ -73,9 +73,9 @@ int main() {
     return i + 1; // 正常返回
   }).then([](int a) {
     return awacorn::reject<void>(awacorn::any()); // 拒绝
-  }).error([](const awacorn::any& err) {
+  }).error([](const std::exception_ptr& err) {
     return err; // 将拒绝变为解决
-  }).then([](const awacorn::any&) {
+  }).then([](const std::exception_ptr&) {
     // error
   }).finally([]() {
     // ...
@@ -87,7 +87,7 @@ int main() {
 - 无论是 `then`、`error` 还是 `finally` 方法都只接受一个回调函数。
   - 回调函数可以返回一个值或者 `Promise`，用于传递给下一个 `then`/`error` (见下)。
     - 返回 `Promise` 表示下一个回调将在**返回的 `Promise` 结束**(_解决或拒绝_)后被执行。
-  - 当然，抛出错误可以用 `return awacorn::reject` 或者 `throw awacorn::any`。当然返回也可以 `return awacorn::resolve` 或者 `return value` (使用 `resolve` / `reject` 的方式用于返回 `Promise` 时统一返回类型)。
+  - 当然，抛出错误可以用 `return awacorn::reject` 或者 `throw 错误`。当然返回也可以 `return awacorn::resolve` 或者 `return value` (使用 `resolve` / `reject` 的方式用于返回 `Promise` 时统一返回类型)。
 - 这三个方法都返回一个新的 `Promise` 用于处理返回值。
   - :beginner: 比如匿名函数返回 `int` 或者 `promise<int>`，方法就会返回 `promise<int>`。
   - :warning: 这三个方法返回的 `Promise` 和之前的 `Promise` 没有任何关系。比如，在注册 `error` 以后再往后注册回调，如果 `error` 前面的 `Promise` 没有被拒绝而是被解决了，那么 `error` 后注册的回调将永远不会被调用。

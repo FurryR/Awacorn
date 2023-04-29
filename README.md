@@ -8,7 +8,7 @@
 int main() {
   awacorn::event_loop ev;
   awacorn::async(
-      [&](awacorn::context& ctx) -> void {
+      [&](awacorn::context& ctx) {
         std::cout << "Hello World. Input your name" << std::endl;
         std::string name = ctx >> async_input(&ev, "Your name: ");
         std::cout << "Welcome, " << name << "!" << std::endl;
@@ -58,18 +58,18 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 以下是 Awacorn 支持的编译选项。
 
-| 选项                    | 描述                                                               | 要求                       |
-| ----------------------- | ------------------------------------------------------------------ | -------------------------- |
-| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。     | N/A                        |
-| -DAWACORN_USE_BOOST     | :construction: 使用 `boost::coroutines2::coroutine` 作为协程实现。 | `boost_coroutine`          |
-| -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                    | `ucontext.h` (libucontext) |
+| 选项                    | 描述                                                              | 要求                       |
+| ----------------------- | ----------------------------------------------------------------- | -------------------------- |
+| -DAWACORN_BUILD_EXAMPLE | :green_heart: 构建所有示例程序和测试，这将导致额外的编译时间。    | N/A                        |
+| -DAWACORN_USE_BOOST     | :construction: 使用 `boost::context::continuation` 作为协程实现。 | `boost_context`            |
+| -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                   | `ucontext.h` (libucontext) |
 
 :bulb: 提示: 当 `-DAWACORN_USE_BOOST` 和 `-DAWACORN_USE_UCONTEXT` 均未被指定时，Awacorn 将自动指定最优实现。
 
 :warning: 警告: 当 `boost` 和 `ucontext` 均无法使用时，编译将失败。请安装 `libucontext` 或 `libboost`。
 
-- [boost::coroutines2](https://github.com/boostorg/coroutine2):
-  - :penguin: Debian: `apt install libboost-coroutine-dev`
+- [boost::context](https://github.com/boostorg/context):
+  - :penguin: Debian: `apt install libboost-context-dev`
   - :iphone: Termux: `apt install boost-headers`
 - [libucontext](https://github.com/kaniini/libucontext):
   - :white_check_mark: 几乎所有 `i386/x86_64` Linux 发行版都包含 `ucontext` 支持。
@@ -79,13 +79,13 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 以下是 Awacorn 的组件大览。
 
-| 组件名      | 描述                                            | 依赖                                | 文档                                    |
-| ----------- | ----------------------------------------------- | ----------------------------------- | --------------------------------------- |
-| `event`     | Awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: <br>[event](doc/event.md)       |
-| `promise`   | 类似于 Javascript 的 Promise，低成本 & 强类型。 | void                                | :wolf: <br>[promise](doc/promise.md)    |
-| `async` | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: <br>[async](doc/async.md) |
-| `function`  | Awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: <br>[function](doc/function.md)  |
-| `capture`   | Awacorn 采用的内部万能捕获实现。                | void                                | :ox: <br>[capture](doc/capture.md)      |
+| 组件名     | 描述                                            | 依赖                                | 文档                                   |
+| ---------- | ----------------------------------------------- | ----------------------------------- | -------------------------------------- |
+| `event`    | Awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: <br>[event](doc/event.md)      |
+| `promise`  | 类似于 Javascript 的 Promise，低成本 & 强类型。 | void                                | :wolf: <br>[promise](doc/promise.md)   |
+| `async`    | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: <br>[async](doc/async.md)        |
+| `function` | Awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: <br>[function](doc/function.md) |
+| `capture`  | Awacorn 采用的内部万能捕获实现。                | void                                | :ox: <br>[capture](doc/capture.md)     |
 
 :beginner: 点击 **文档** 即可查看组件相关的 **详细文档**。
 
