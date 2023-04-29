@@ -51,7 +51,7 @@ struct _async_fn;
 /**
  * @brief 生成器上下文基类。
  */
-class context {
+struct context {
 #if defined(AWACORN_USE_BOOST)
   context(void (*fn)(void*), void* arg, size_t stack_size = 0)
       : _status(detail::_async_state_t::Pending),
@@ -84,7 +84,6 @@ class context {
 #else
 #error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
- public:
   context(const context&) = delete;
   /**
    * @brief 等待 promise 完成并返回 promise 的结果值。
