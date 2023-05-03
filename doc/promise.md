@@ -15,7 +15,7 @@
     - [`any`](#any)
     - [`race`](#race)
     - [`all_settled`](#all_settled)
-  - [`awacorn::any`](#awacornany)
+  - [`awacorn::variant`](#awacornvariant)
 
 ---
 
@@ -140,14 +140,14 @@ int main() {
 
 请参照 [Promise.any](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/any)。
 
-- :warning: `any` 是弱类型的，所以返回值是 `promise<awacorn::any>` (**未来可能会变更为 variant，不稳定**)。
-- :warning: 在全部 `Promise` 都被拒绝的情况下会直接使用最后一个错误拒绝返回的 `Promise`，而不是使用 `AggregateError` (**未来可能会添加，不稳定**)。
+- :warning: 在 C++ 11 下返回值是 `promise<awacorn::variant<...>>`。
+- :warning: 在全部 `Promise` 都被拒绝的情况下会直接用 `std::array` 来拒绝 `Promise` (长度为总共的 `promise` 数量)，而不是使用 `AggregateError`。
 
 ### `race`
 
 请参照 [Promise.race](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/race)。
 
-- :warning: `race` 是弱类型的，所以返回值是 `promise<awacorn::any>` (**未来可能会变更为 variant，不稳定**)。
+- :warning: 在 C++ 11 下返回值是 `promise<awacorn::variant<...>>`。
 
 ### `all_settled`
 
@@ -156,10 +156,10 @@ int main() {
 - :warning: `all_settled` 使用 `std::tuple` 来承载返回值。
 - 对于 `all_settled` 函数，无论传入的 `Promise` 是否错误都会正常返回。
 
-## `awacorn::any`
+## `awacorn::variant`
 
-用于兼容 C++ 11 的 `any` 实现。在 C++ 17 下是 `std::any` 的别名。
+用于兼容 C++ 11 的 `variant` 实现。在 C++ 17 下是 `std::variant` 的别名。
 
-实现了几乎所有的 `std::any` 接口 (`awacorn::any_cast` 用于转换)，请尽情使用。
+实现了一小部分的 `std::variant` 接口，请尽情使用。
 
-:warning: 注意: 在 C++ 11 上请确保使用 **awacorn::any** 而不是其它的 any 实现，因为使用其它的 any 容器可能导致跟 awacorn 不兼容。如果实在是要使用指定实现，请**更改 Awacorn 源代码**。
+:warning: 注意: 在 C++ 11 上请确保使用 **awacorn::variant** 而不是其它的 variant 实现，因为使用其它的 variant 容器可能导致跟 awacorn 不兼容。如果实在是要使用指定实现，请**更改 Awacorn 源代码**。

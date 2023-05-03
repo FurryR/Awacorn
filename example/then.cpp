@@ -17,13 +17,17 @@ int main() {
   std::cout << "ptr.use_count() before resolve: " << ptr.use_count()
             << std::endl;
   pm.resolve();
-  awacorn::gather::all(pm).then([](const std::tuple<std::nullptr_t>&) {
+  awacorn::gather::all(pm).then([](const std::tuple<awacorn::monostate>&) {
     std::cout << "all" << std::endl;
   });
   awacorn::gather::any(pm).then(
-      [](const awacorn::any&) { std::cout << "any" << std::endl; });
+      [](const awacorn::variant<awacorn::monostate>&) {
+        std::cout << "any" << std::endl;
+      });
   awacorn::gather::race(pm).then(
-      [](const awacorn::any&) { std::cout << "race" << std::endl; });
+      [](const awacorn::variant<awacorn::monostate>&) {
+        std::cout << "race" << std::endl;
+      });
   awacorn::gather::all_settled(pm).then(
       [](const std::tuple<awacorn::promise<void>>&) {
         std::cout << "all_settled" << std::endl;

@@ -21,11 +21,10 @@ class function<Ret(Args...)> {
     virtual ~_m_base() = default;
   };
   template <typename T>
-  class _m_derived : public _m_base {
+  struct _m_derived : _m_base {
     using value_type = typename std::decay<T>::type;
     value_type fn;
 
-   public:
     _m_derived(const value_type& fn) : fn(fn) {}
     _m_derived(value_type&& fn) : fn(std::move(fn)) {}
     const std::type_info& target_type() const noexcept override {

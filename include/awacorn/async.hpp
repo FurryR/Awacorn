@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "detail/function.hpp"
+#include "detail/unsafe_any.hpp"
 #include "promise.hpp"
 
 namespace awacorn {
@@ -36,7 +37,7 @@ namespace detail {
 /**
  * @brief 生成器的状态。
  */
-enum class _async_state_t {
+enum class async_state_t {
   Pending = 0,   // 尚未运行
   Active = 1,    // 运行中
   Returned = 2,  // 已返回
@@ -44,9 +45,9 @@ enum class _async_state_t {
   Throwed = 4    // 抛出错误
 };
 template <typename Fn>
-struct _basic_async_fn;
+struct basic_async_fn;
 template <typename RetType>
-struct _async_fn;
+struct async_fn;
 };  // namespace detail
 /**
  * @brief 生成器上下文基类。
@@ -54,21 +55,21 @@ struct _async_fn;
 struct context {
 #if defined(AWACORN_USE_BOOST)
   context(void (*fn)(void*), void* arg, size_t stack_size = 0)
-      : _status(detail::_async_state_t::Pending),
+      : _status(detail::async_state_t::Pending),
+        _failbit(false),
         _ctx(boost::context::callcc(
             std::allocator_arg,
             boost::context::fixedsize_stack(
                 stack_size ? stack_size
                            : boost::context::stack_traits::default_size()),
             [this, fn, arg](boost::context::continuation&& ctx) {
-              _ctx = std::move(ctx);
-              _ctx = _ctx.resume();
+              _ctx = ctx.resume();
               fn(arg);
               return std::move(_ctx);
             })) {}
 #elif defined(AWACORN_USE_UCONTEXT)
   context(void (*fn)(void*), void* arg, size_t stack_size = 0)
-      : _status(detail::_async_state_t::Pending),
+      : _status(detail::async_state_t::Pending),
         _stack(nullptr, [](char* ptr) {
           if (ptr) delete[] ptr;
         }) {
@@ -94,26 +95,26 @@ struct context {
    */
   template <typename T>
   T operator>>(const promise<T>& value) {
-    if (_status != detail::_async_state_t::Active)
+    if (_status != detail::async_state_t::Active)
       throw std::bad_function_call();
-    _status = detail::_async_state_t::Awaiting;
-    _result = value.then([](const T& v) { return any(v); });
+    _status = detail::async_state_t::Awaiting;
+    _result = value.then([](const T& v) { return detail::unsafe_any(v); });
     resume();
     if (_failbit) {
       _failbit = false;
-      std::rethrow_exception(any_cast<std::exception_ptr>(_result));
+      std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(_result));
     }
-    return any_cast<T>(_result);
+    return detail::unsafe_cast<T>(_result);
   }
   void operator>>(const promise<void>& value) {
-    if (_status != detail::_async_state_t::Active)
+    if (_status != detail::async_state_t::Active)
       throw std::bad_function_call();
-    _status = detail::_async_state_t::Awaiting;
-    _result = value.then([]() { return any(); });
+    _status = detail::async_state_t::Awaiting;
+    _result = value.then([]() { return detail::unsafe_any(); });
     resume();
     if (_failbit) {
       _failbit = false;
-      std::rethrow_exception(any_cast<std::exception_ptr>(_result));
+      std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(_result));
     }
   }
 
@@ -128,9 +129,9 @@ struct context {
 #error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
   }
-  detail::_async_state_t _status;
+  detail::unsafe_any _result;
+  detail::async_state_t _status;
   bool _failbit;
-  any _result;
 #if defined(AWACORN_USE_BOOST)
   boost::context::continuation _ctx;
 #elif defined(AWACORN_USE_UCONTEXT)
@@ -140,34 +141,34 @@ struct context {
 #error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
 #endif
   template <typename T>
-  friend struct detail::_async_fn;
+  friend struct detail::async_fn;
   template <typename T>
-  friend struct detail::_basic_async_fn;
+  friend struct detail::basic_async_fn;
 };
 namespace detail {
 template <typename Fn>
-struct _basic_async_fn {
+struct basic_async_fn {
  protected:
   context ctx;
   function<Fn> fn;
   template <typename U>
-  _basic_async_fn(U&& fn, void (*run_fn)(void*), void* args,
+  basic_async_fn(U&& fn, void (*run_fn)(void*), void* args,
                   size_t stack_size = 0)
       : ctx(run_fn, args, stack_size), fn(std::forward<U>(fn)) {}
-  _basic_async_fn(const _basic_async_fn& v) = delete;
+  basic_async_fn(const basic_async_fn& v) = delete;
 };
 template <typename RetType>
-struct _async_fn : public _basic_async_fn<RetType(context&)>,
-                   public std::enable_shared_from_this<_async_fn<RetType>> {
-  explicit _async_fn(const _async_fn& v) = delete;
+struct async_fn : basic_async_fn<RetType(context&)>,
+                   std::enable_shared_from_this<async_fn<RetType>> {
+  explicit async_fn(const async_fn& v) = delete;
   promise<RetType> next() {
-    if (this->ctx._status == _async_state_t::Pending) {
-      this->ctx._status = _async_state_t::Active;
+    if (this->ctx._status == async_state_t::Pending) {
+      this->ctx._status = async_state_t::Active;
       this->ctx.resume();
-      if (this->ctx._status == _async_state_t::Awaiting) {
-        std::shared_ptr<_async_fn> ref = this->shared_from_this();
+      if (this->ctx._status == async_state_t::Awaiting) {
+        std::shared_ptr<async_fn> ref = this->shared_from_this();
         promise<RetType> pm;
-        promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
+        promise<detail::unsafe_any> tmp = detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
         tmp.then([ref, pm](std::exception_ptr res) {
              ref->ctx._result = res;
              ref->_await_next()
@@ -184,54 +185,54 @@ struct _async_fn : public _basic_async_fn<RetType(context&)>,
                       [pm](const std::exception_ptr& err) { pm.reject(err); });
             });
         return pm;
-      } else if (this->ctx._status == _async_state_t::Returned) {
-        return resolve(any_cast<RetType>(this->ctx._result));
+      } else if (this->ctx._status == async_state_t::Returned) {
+        return resolve(detail::unsafe_cast<RetType>(this->ctx._result));
       }
-      return reject<RetType>(any_cast<std::exception_ptr>(this->ctx._result));
-    } else if (this->ctx._status == _async_state_t::Returned) {
-      return resolve(any_cast<RetType>(this->ctx._result));
+      return reject<RetType>(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+    } else if (this->ctx._status == async_state_t::Returned) {
+      return resolve(detail::unsafe_cast<RetType>(this->ctx._result));
     }
-    return reject<RetType>(any_cast<std::exception_ptr>(this->ctx._result));
+    return reject<RetType>(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
   }
   template <typename... Args>
-  static inline std::shared_ptr<_async_fn> create(Args&&... args) {
-    return std::shared_ptr<_async_fn>(
-        new _async_fn(std::forward<Args>(args)...));
+  static inline std::shared_ptr<async_fn> create(Args&&... args) {
+    return std::shared_ptr<async_fn>(
+        new async_fn(std::forward<Args>(args)...));
   }
 
  private:
   inline promise<RetType> _await_next() {
-    this->ctx._status = _async_state_t::Pending;
+    this->ctx._status = async_state_t::Pending;
     return this->next();
   }
   template <typename U>
-  explicit _async_fn(U&& fn, size_t stack_size = 0)
-      : _basic_async_fn<RetType(context&)>(
+  explicit async_fn(U&& fn, size_t stack_size = 0)
+      : basic_async_fn<RetType(context&)>(
             std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
-  static void run_fn(_async_fn* self) {
+  static void run_fn(async_fn* self) {
     try {
       self->ctx._result = self->fn(self->ctx);
-      self->ctx._status = _async_state_t::Returned;
+      self->ctx._status = async_state_t::Returned;
     } catch (...) {
       self->ctx._result = std::current_exception();
-      self->ctx._status = _async_state_t::Throwed;
+      self->ctx._status = async_state_t::Throwed;
     }
     self->ctx.resume();
   }
 };
 template <>
-struct _async_fn<void> : public _basic_async_fn<void(context&)>,
-                         public std::enable_shared_from_this<_async_fn<void>> {
-  explicit _async_fn(const _async_fn& v) = delete;
+struct async_fn<void> : basic_async_fn<void(context&)>,
+                         std::enable_shared_from_this<async_fn<void>> {
+  explicit async_fn(const async_fn& v) = delete;
   promise<void> next() {
-    if (this->ctx._status == _async_state_t::Pending) {
-      this->ctx._status = _async_state_t::Active;
+    if (this->ctx._status == async_state_t::Pending) {
+      this->ctx._status = async_state_t::Active;
       this->ctx.resume();
-      if (this->ctx._status == _async_state_t::Awaiting) {
-        std::shared_ptr<_async_fn> ref = this->shared_from_this();
+      if (this->ctx._status == async_state_t::Awaiting) {
+        std::shared_ptr<async_fn> ref = this->shared_from_this();
         promise<void> pm;
-        promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
-        tmp.then([ref, pm](const any& res) {
+        promise<detail::unsafe_any> tmp = detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+        tmp.then([ref, pm](const detail::unsafe_any& res) {
              ref->ctx._result = res;
              ref->_await_next()
                  .then([pm]() { pm.resolve(); })
@@ -247,37 +248,37 @@ struct _async_fn<void> : public _basic_async_fn<void(context&)>,
                       [pm](const std::exception_ptr& err) { pm.reject(err); });
             });
         return pm;
-      } else if (this->ctx._status == _async_state_t::Returned) {
+      } else if (this->ctx._status == async_state_t::Returned) {
         return resolve();
       }
-      return reject<void>(any_cast<std::exception_ptr>(this->ctx._result));
-    } else if (this->ctx._status == _async_state_t::Returned) {
+      return reject<void>(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+    } else if (this->ctx._status == async_state_t::Returned) {
       return resolve();
     }
-    return reject<void>(any_cast<std::exception_ptr>(this->ctx._result));
+    return reject<void>(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
   }
   template <typename... Args>
-  static inline std::shared_ptr<_async_fn> create(Args&&... args) {
-    return std::shared_ptr<_async_fn>(
-        new _async_fn(std::forward<Args>(args)...));
+  static inline std::shared_ptr<async_fn> create(Args&&... args) {
+    return std::shared_ptr<async_fn>(
+        new async_fn(std::forward<Args>(args)...));
   }
 
  private:
   inline promise<void> _await_next() {
-    this->ctx._status = _async_state_t::Pending;
+    this->ctx._status = async_state_t::Pending;
     return this->next();
   }
   template <typename U>
-  explicit _async_fn(U&& fn, size_t stack_size = 0)
-      : _basic_async_fn<void(context&)>(
+  explicit async_fn(U&& fn, size_t stack_size = 0)
+      : basic_async_fn<void(context&)>(
             std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
-  static void run_fn(_async_fn* self) {
+  static void run_fn(async_fn* self) {
     try {
       self->fn(self->ctx);
-      self->ctx._status = _async_state_t::Returned;
+      self->ctx._status = async_state_t::Returned;
     } catch (...) {
       self->ctx._result = std::current_exception();
-      self->ctx._status = _async_state_t::Throwed;
+      self->ctx._status = async_state_t::Throwed;
     }
     self->ctx.resume();
   }
@@ -295,7 +296,7 @@ struct _async_fn<void> : public _basic_async_fn<void(context&)>,
 template <typename U>
 auto async(U&& fn, size_t stack_size = 0)
     -> promise<decltype(fn(std::declval<context&>()))> {
-  return detail::_async_fn<decltype(fn(std::declval<context&>()))>::create(
+  return detail::async_fn<decltype(fn(std::declval<context&>()))>::create(
              std::forward<U>(fn), stack_size)
       ->next();
 }

@@ -30,10 +30,12 @@
 #include <vector>
 
 #include "detail/function.hpp"
+#include "detail/unsafe_any.hpp"
+#include "detail/variant.hpp"
 #include "promise.hpp"
 
 namespace awacorn {
-struct cancel_error : public std::exception {
+struct cancel_error : std::exception {
   ~cancel_error() noexcept override {}
   const char* what() const noexcept override { return "generator cancelled"; }
 };
@@ -56,29 +58,29 @@ struct result_t {
     Yield = 2    // 中断类型
   };
   /**
-   * @brief 获得返回值。类型不正确则抛出 std::bad_cast 错误。
+   * @brief 获得返回值。类型不正确则抛出 bad_variant_access 错误。
    *
    * @return const ret_type& 返回值的只读引用。
    */
   const ret_type& ret() const {
-    if (_type != Return) throw std::bad_cast();
-    return *(const ret_type*)_val;
+    if (_type != Return) throw bad_variant_access();
+    return get<ret_type>(_val);
   }
   /**
-   * @brief 获得中断值。类型不正确则抛出 std::bad_cast 错误。
+   * @brief 获得中断值。类型不正确则抛出 bad_variant_access 错误。
    *
    * @return const YieldType& 中断值的只读引用。
    */
   const yield_type& yield() const {
-    if (_type != Yield) throw std::bad_cast();
-    return *(const yield_type*)_val;
+    if (_type != Yield) throw bad_variant_access();
+    return get<yield_type>(_val);
   }
   /**
    * @brief 获得结果类型。
    *
    * @return state_t 结果类型。
    */
-  inline state_t type() const noexcept { return _type; }
+  constexpr state_t type() const noexcept { return _type; }
   /**
    * @brief (内部 API) 构造中断类型。
    *
@@ -89,13 +91,13 @@ struct result_t {
       const yield_type& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    new (tmp._val) yield_type(value);
+    tmp._val = value;
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_yield(yield_type&& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Yield;
-    new (tmp._val) yield_type(std::move(value));
+    tmp._val = std::move(value);
     return tmp;
   }
   /**
@@ -107,56 +109,19 @@ struct result_t {
   static result_t<ret_type, yield_type> generate_ret(const ret_type& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    new (tmp._val) ret_type(value);
+    tmp._val = value;
     return tmp;
   }
   static result_t<ret_type, yield_type> generate_ret(ret_type&& value) {
     result_t<ret_type, yield_type> tmp;
     tmp._type = Return;
-    new (tmp._val) ret_type(std::move(value));
+    tmp._val = std::move(value);
     return tmp;
   }
   result_t() : _type(Null) {}
-  result_t(const result_t<ret_type, yield_type>& val) : _type(val._type) {
-    if (val._type == Return) {
-      new (_val) ret_type(*(const ret_type*)val._val);
-    } else if (val._type == Yield) {
-      new (_val) yield_type(*(const yield_type*)val._val);
-    }
-  }
-  result_t(result_t<ret_type, yield_type>&& val) : _type(val._type) {
-    std::swap(_type, val._type);
-    std::swap(_val, val._val);
-  }
-  result_t& operator=(const result_t& val) {
-    ~result_t();
-    _type = val._type;
-    if (val._type == Return) {
-      new (_val) ret_type(*(const ret_type*)val._val);
-    } else if (val._type == Yield) {
-      new (_val) yield_type(*(const yield_type*)val._val);
-    }
-    return *this;
-  }
-  result_t& operator=(result_t&& rhs) {
-    std::swap(_type, rhs._type);
-    std::swap(_val, rhs._val);
-    return *this;
-  }
-  ~result_t() {
-    if (_type == Return) {
-      ((ret_type*)_val)->~ret_type();
-    } else if (_type == Yield) {
-      ((yield_type*)_val)->~yield_type();
-    }
-  }
 
  private:
-  alignas(alignof(ret_type) > alignof(yield_type)
-              ? alignof(ret_type)
-              : alignof(yield_type)) unsigned char _val
-      [sizeof(ret_type) > sizeof(yield_type) ? sizeof(ret_type)
-                                             : sizeof(yield_type)];
+  variant<ret_type, yield_type> _val;
   state_t _type;
 };
 /**
@@ -200,13 +165,13 @@ struct result_t<void, YieldType> {
   static result_t<void, yield_type> generate_yield(const yield_type& value) {
     result_t<void, yield_type> tmp;
     tmp._type = Yield;
-    new (tmp._val) yield_type(value);
+    tmp._val = value;
     return tmp;
   }
   static result_t<void, yield_type> generate_yield(yield_type&& value) {
     result_t<void, yield_type> tmp;
     tmp._type = Yield;
-    new (tmp._val) yield_type(std::move(value));
+    tmp._val = std::move(value);
     return tmp;
   }
   /**
@@ -219,37 +184,9 @@ struct result_t<void, YieldType> {
     tmp._type = Return;
     return tmp;
   }
-  result_t() : _type(Null) {}
-  result_t(const result_t<void, yield_type>& val) : _type(val._type) {
-    if (val._type == Yield) {
-      new (_val) yield_type(*(const yield_type*)val._val);
-    }
-  }
-  result_t(result_t<void, yield_type>&& val) : _type(val._type) {
-    std::swap(_type, val._type);
-    std::swap(_val, val._val);
-  }
-  result_t& operator=(const result_t& val) {
-    ~result_t();
-    _type = val._type;
-    if (val._type == Yield) {
-      new (_val) yield_type(*(const yield_type*)val._val);
-    }
-    return *this;
-  }
-  result_t& operator=(result_t&& rhs) {
-    std::swap(_type, rhs._type);
-    std::swap(_val, rhs._val);
-    return *this;
-  }
-  ~result_t() {
-    if (_type == Yield) {
-      ((yield_type*)_val)->~yield_type();
-    }
-  }
 
  private:
-  alignas(alignof(yield_type)) unsigned char _val[sizeof(yield_type)];
+  yield_type _val;
   state_t _type;
 };
 namespace detail {
@@ -268,8 +205,7 @@ struct basic_context {
                 stack_size ? stack_size
                            : boost::context::stack_traits::default_size()),
             [this, fn, arg](boost::context::continuation&& ctx) {
-              _ctx = std::move(ctx);
-              _ctx = _ctx.resume();
+              _ctx = ctx.resume();
               fn(arg);
               return std::move(_ctx);
             })) {}
@@ -297,7 +233,7 @@ struct basic_context {
   struct __yield_impl {
     template <typename RetType, typename YieldType>
     static void apply(basic_context<State>* ctx, YieldType&& value,
-                      any* result) {
+                      detail::unsafe_any* result) {
       if (ctx->_status != State::Active) throw std::bad_function_call();
       ctx->_status = State::Yielded;
       *result = std::forward<YieldType>(value);
@@ -311,32 +247,32 @@ struct basic_context {
   struct __await_impl {
     template <typename T>
     static T apply(basic_context<State>* ctx, const promise<T>& value,
-                   any* result, bool* failbit) {
+                   detail::unsafe_any* result, bool* failbit) {
       if (ctx->_status != State::Active) throw std::bad_function_call();
       ctx->_status = State::Awaiting;
-      *result = value.then([](const T& v) { return any(v); });
+      *result = value.then([](const T& v) { return detail::unsafe_any(v); });
       ctx->resume();
       if (ctx->_cancelling) {
         throw cancel_error();
       }
       if (*failbit) {
         *failbit = false;
-        std::rethrow_exception(any_cast<std::exception_ptr>(*result));
+        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(*result));
       }
-      return any_cast<T>(*result);
+      return detail::unsafe_cast<T>(*result);
     }
     static void apply(basic_context<State>* ctx, const promise<void>& value,
-                      any* result, bool* failbit) {
+                      detail::unsafe_any* result, bool* failbit) {
       if (ctx->_status != State::Active) throw std::bad_function_call();
       ctx->_status = State::Awaiting;
-      *result = value.then([]() { return any(); });
+      *result = value.then([]() { return detail::unsafe_any(); });
       ctx->resume();
       if (ctx->_cancelling) {
         throw cancel_error();
       }
       if (*failbit) {
         *failbit = false;
-        std::rethrow_exception(any_cast<std::exception_ptr>(*result));
+        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(*result));
       }
     }
   };
@@ -429,10 +365,10 @@ struct generator {
     friend struct _generator;
 
    private:
-    any _result;
+    detail::unsafe_any _result;
   };
   struct _generator
-      : public detail::basic_generator<RetType(context&), context> {
+      : detail::basic_generator<RetType(context&), context> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -450,19 +386,19 @@ struct generator {
         this->ctx.resume();
         if (this->ctx._status == Yielded) {
           return result_t<RetType, YieldType>::generate_yield(
-              any_cast<YieldType>(this->ctx._result));
+              detail::unsafe_cast<YieldType>(this->ctx._result));
         } else if (this->ctx._status == Returned) {
           return result_t<RetType, YieldType>::generate_ret(
-              any_cast<RetType>(this->ctx._result));
+              detail::unsafe_cast<RetType>(this->ctx._result));
         } else if (this->ctx._status == Cancelled) {
           throw cancel_error();
         }
-        std::rethrow_exception(any_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       } else if (this->ctx._status == Returned) {
         return result_t<RetType, YieldType>::generate_ret(
-            any_cast<RetType>(this->ctx._result));
+            detail::unsafe_cast<RetType>(this->ctx._result));
       } else if (this->ctx._status == Throwed) {
-        std::rethrow_exception(any_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }
@@ -566,9 +502,9 @@ struct generator<void, YieldType> {
     friend struct _generator;
 
    private:
-    any _result;
+    detail::unsafe_any _result;
   };
-  struct _generator : public detail::basic_generator<void(context&), context> {
+  struct _generator : detail::basic_generator<void(context&), context> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -586,17 +522,17 @@ struct generator<void, YieldType> {
         this->ctx.resume();
         if (this->ctx._status == Yielded) {
           return result_t<void, YieldType>::generate_yield(
-              any_cast<YieldType>(this->ctx._result));
+              detail::unsafe_cast<YieldType>(this->ctx._result));
         } else if (this->ctx._status == Returned) {
           return result_t<void, YieldType>::generate_ret();
         } else if (this->ctx._status == Cancelled) {
           throw cancel_error();
         }
-        std::rethrow_exception(any_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       } else if (this->ctx._status == Returned) {
         return result_t<void, YieldType>::generate_ret();
       } else if (this->ctx._status == Throwed) {
-        std::rethrow_exception(any_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }
@@ -716,12 +652,12 @@ struct async_generator {
     friend struct _generator;
 
    private:
-    any _result;
+    detail::unsafe_any _result;
     bool _failbit;
   };
   struct _generator
-      : public detail::basic_generator<RetType(context&), context>,
-        public std::enable_shared_from_this<_generator> {
+      : detail::basic_generator<RetType(context&), context>,
+        std::enable_shared_from_this<_generator> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -740,8 +676,8 @@ struct async_generator {
         if (this->ctx._status == Awaiting) {
           std::weak_ptr<_generator> ref = this->shared_from_this();
           promise<result_t<RetType, YieldType>> pm;
-          promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
-          tmp.then([ref, pm](const any& res) {
+          promise<detail::unsafe_any> tmp = detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+          tmp.then([ref, pm](const detail::unsafe_any& res) {
                if (std::shared_ptr<_generator> tmp = ref.lock()) {
                  tmp->ctx._result = res;
                  tmp->_await_next()
@@ -771,22 +707,22 @@ struct async_generator {
           return pm;
         } else if (this->ctx._status == Yielded) {
           return resolve(result_t<RetType, YieldType>::generate_yield(
-              any_cast<YieldType>(this->ctx._result)));
+              detail::unsafe_cast<YieldType>(this->ctx._result)));
         } else if (this->ctx._status == Returned) {
           return resolve(result_t<RetType, YieldType>::generate_ret(
-              any_cast<RetType>(this->ctx._result)));
+              detail::unsafe_cast<RetType>(this->ctx._result)));
         } else if (this->ctx._status == Cancelled) {
           return reject<result_t<RetType, YieldType>>(
               std::make_exception_ptr(cancel_error()));
         }
         return reject<result_t<RetType, YieldType>>(
-            any_cast<std::exception_ptr>(this->ctx._result));
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       } else if (this->ctx._status == Returned) {
         return resolve(result_t<RetType, YieldType>::generate_ret(
-            any_cast<RetType>(this->ctx._result)));
+            detail::unsafe_cast<RetType>(this->ctx._result)));
       } else if (this->ctx._status == Throwed) {
         return reject<result_t<RetType, YieldType>>(
-            any_cast<std::exception_ptr>(this->ctx._result));
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }
@@ -912,11 +848,11 @@ struct async_generator<void, YieldType> {
     friend struct _generator;
 
    private:
-    any _result;
+    detail::unsafe_any _result;
     bool _failbit;
   };
-  struct _generator : public detail::basic_generator<void(context&), context>,
-                      public std::enable_shared_from_this<_generator> {
+  struct _generator : detail::basic_generator<void(context&), context>,
+                      std::enable_shared_from_this<_generator> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -935,8 +871,8 @@ struct async_generator<void, YieldType> {
         if (this->ctx._status == Awaiting) {
           std::weak_ptr<_generator> ref = this->shared_from_this();
           promise<result_t<void, YieldType>> pm;
-          promise<any> tmp = any_cast<promise<any>>(this->ctx._result);
-          tmp.then([ref, pm](const any& res) {
+          promise<detail::unsafe_any> tmp = detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+          tmp.then([ref, pm](const detail::unsafe_any& res) {
                if (std::shared_ptr<_generator> tmp = ref.lock()) {
                  tmp->ctx._result = res;
                  tmp->_await_next()
@@ -966,7 +902,7 @@ struct async_generator<void, YieldType> {
           return pm;
         } else if (this->ctx._status == Yielded) {
           return resolve(result_t<void, YieldType>::generate_yield(
-              any_cast<YieldType>(this->ctx._result)));
+              detail::unsafe_cast<YieldType>(this->ctx._result)));
         } else if (this->ctx._status == Returned) {
           return resolve(result_t<void, YieldType>::generate_ret());
         } else if (this->ctx._status == Cancelled) {
@@ -974,12 +910,12 @@ struct async_generator<void, YieldType> {
               std::make_exception_ptr(cancel_error()));
         }
         return reject<result_t<void, YieldType>>(
-            any_cast<std::exception_ptr>(this->ctx._result));
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       } else if (this->ctx._status == Returned) {
         return resolve(result_t<void, YieldType>::generate_ret());
       } else if (this->ctx._status == Throwed) {
         return reject<result_t<void, YieldType>>(
-            any_cast<std::exception_ptr>(this->ctx._result));
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }

@@ -5,13 +5,14 @@
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
+#include <array>
 #include <exception>
 #include <memory>
 #include <tuple>
 
-#include "detail/any.hpp"
 #include "detail/capture.hpp"
 #include "detail/function.hpp"
+#include "detail/variant.hpp"
 namespace awacorn {
 /**
  * @brief promise 的状态。
@@ -22,7 +23,6 @@ enum state_t {
   Rejected = 2    // 已失败。
 };
 namespace detail {
-
 struct basic_promise {
  protected:
   // Promise<T>.then(detail::function<Promise<Ret>(ArgType)>)
@@ -220,10 +220,11 @@ struct basic_promise {
     }
   };
 
-  // Promise<T>.error(detail::function<Promise<Ret>(any)>)
+  // Promise<T>.error(detail::function<Promise<Ret>(std::exception_ptr)>)
   // sub-implementation
 
-  // pm.error(detail::function<Promise<Ret>(any)>) sub-implementation
+  // pm.error(detail::function<Promise<Ret>(std::exception_ptr)>)
+  // sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
   struct __error_sub_impl {
@@ -231,7 +232,7 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](std::exception_ptr val) mutable -> void {
+      pm->error([t, arg_fn](const std::exception_ptr& val) mutable -> void {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()(val);
           tmp.then([t](const Ret& val) -> void { t.resolve(val); });
@@ -244,14 +245,15 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.error(detail::function<Promise<void>(any)>) sub-implementation
+  // pm.error(detail::function<Promise<void>(std::exception_ptr)>)
+  // sub-implementation
   template <template <typename T> class PromiseT, typename _promise>
   struct __error_sub_impl<void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](std::exception_ptr val) mutable -> void {
+      pm->error([t, arg_fn](const std::exception_ptr& val) mutable -> void {
         try {
           PromiseT<void> tmp = arg_fn.borrow()(val);
           tmp.then([t]() -> void { t.resolve(); });
@@ -266,7 +268,7 @@ struct basic_promise {
   };
 
   // Promise<T>.error implementation
-  // pm.error(detail::function<Ret(any)>) implementation
+  // pm.error(detail::function<Ret(std::exception_ptr)>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
   struct __error_impl {
@@ -284,7 +286,7 @@ struct basic_promise {
       return t;
     }
   };
-  // pm.error(detail::function<Promise<Ret>(any)>) implementation
+  // pm.error(detail::function<Promise<Ret>(std::exception_ptr)>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
   struct __error_impl<PromiseT<Ret>, PromiseT, _promise> {
@@ -295,7 +297,7 @@ struct basic_promise {
           pm, std::forward<U>(fn));
     }
   };
-  // pm.error(detail::function<void(any)>) implementation
+  // pm.error(detail::function<void(std::exception_ptr)>) implementation
   template <template <typename T> class PromiseT, typename _promise>
   struct __error_impl<void, PromiseT, _promise> {
     template <typename U>
@@ -432,7 +434,7 @@ struct replace_void<void, ReplaceT> {
  * @tparam T Promise返回的值。
  */
 template <typename T>
-struct promise : public detail::basic_promise {
+struct promise : detail::basic_promise {
   using value_type = typename std::decay<T>::type;
 
  private:
@@ -442,7 +444,7 @@ struct promise : public detail::basic_promise {
     using finally_type = detail::function<void()>;
     void then(type&& fn) {
       if (_status == Fulfilled) {
-        fn(*(value_type*)_val);
+        fn(get<value_type>(_val));
       } else if (_status == Pending) {
         if (_then) {
           detail::capture_helper<type> arg_then =
@@ -458,7 +460,7 @@ struct promise : public detail::basic_promise {
     }
     void error(error_type&& fn) {
       if (_status == Rejected) {
-        fn(*(std::exception_ptr*)_val);
+        fn(get<std::exception_ptr>(_val));
       } else if (_status == Pending) {
         if (_error) {
           detail::capture_helper<error_type> arg_error =
@@ -493,8 +495,8 @@ struct promise : public detail::basic_promise {
     void resolve(const value_type& val) {
       if (_status == Pending) {
         _status = Fulfilled;
-        new (_val) value_type(val);
-        if (_then) _then((*(value_type*)_val));
+        _val = val;
+        if (_then) _then(get<value_type>(_val));
         if (_finally) _finally();
         reset();
       }
@@ -502,8 +504,8 @@ struct promise : public detail::basic_promise {
     void resolve(value_type&& val) {
       if (_status == Pending) {
         _status = Fulfilled;
-        new (_val) value_type(std::move(val));
-        if (_then) _then((*(value_type*)_val));
+        _val = std::move(val);
+        if (_then) _then(get<value_type>(_val));
         if (_finally) _finally();
         reset();
       }
@@ -511,8 +513,8 @@ struct promise : public detail::basic_promise {
     void reject(const std::exception_ptr& err) {
       if (_status == Pending) {
         _status = Rejected;
-        new (_val) std::exception_ptr(err);
-        if (_error) _error(*(std::exception_ptr*)_val);
+        _val = err;
+        if (_error) _error(get<std::exception_ptr>(_val));
         if (_finally) _finally();
         reset();
       }
@@ -520,13 +522,6 @@ struct promise : public detail::basic_promise {
     constexpr state_t status() const noexcept { return _status; }
     _promise() : _status(Pending) {}
     _promise(const _promise& val) = delete;
-    ~_promise() {
-      if (_status == Fulfilled) {
-        ((value_type*)_val)->~value_type();
-      } else if (_status == Rejected) {
-        ((std::exception_ptr*)_val)->~exception_ptr();
-      }
-    }
 
    private:
     void reset() {
@@ -538,12 +533,7 @@ struct promise : public detail::basic_promise {
     type _then;
     error_type _error;
     finally_type _finally;
-    alignas(alignof(value_type) > alignof(std::exception_ptr)
-                ? alignof(value_type)
-                : alignof(std::exception_ptr)) unsigned char _val
-        [sizeof(value_type) > sizeof(std::exception_ptr)
-             ? sizeof(value_type)
-             : sizeof(std::exception_ptr)];
+    variant<value_type, std::exception_ptr> _val;
   };
   std::shared_ptr<_promise> pm;
 
@@ -626,7 +616,7 @@ struct promise : public detail::basic_promise {
  * @brief 没有值的 promise 对象。
  */
 template <>
-class promise<void> : public detail::basic_promise {
+class promise<void> : detail::basic_promise {
   struct _promise {
     using type = detail::function<void()>;
     using error_type = detail::function<void(const std::exception_ptr&)>;
@@ -791,14 +781,14 @@ class promise<void> : public detail::basic_promise {
 };
 namespace detail {
 template <typename ResultType, size_t N>
-struct _promise_all {
+struct promise_all {
   template <typename T, typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
                            const std::shared_ptr<size_t>& done_count,
                            const promise<T>& current, Args&&... args) {
-    _promise_all<ResultType, N - 1>::apply(pm, result, done_count,
-                                           std::forward<Args>(args)...);
+    promise_all<ResultType, N - 1>::apply(pm, result, done_count,
+                                          std::forward<Args>(args)...);
     current.then([result, done_count, pm](const T& value) -> void {
       if (result) {
         std::get<N>(*result) = value;
@@ -807,28 +797,28 @@ struct _promise_all {
         }
       }
     });
-    current.error([pm](std::exception_ptr v) -> void { pm.reject(v); });
+    current.error([pm](const std::exception_ptr& v) -> void { pm.reject(v); });
   }
   template <typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
                            const std::shared_ptr<size_t>& done_count,
                            const promise<void>& current, Args&&... args) {
-    _promise_all<ResultType, N - 1>::apply(pm, result, done_count,
-                                           std::forward<Args>(args)...);
+    promise_all<ResultType, N - 1>::apply(pm, result, done_count,
+                                          std::forward<Args>(args)...);
     current.then([result, done_count, pm]() -> void {
       if (result) {
-        std::get<N>(*result) = nullptr;
+        std::get<N>(*result) = monostate();
         if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
           pm.resolve(std::move(*result));
         }
       }
     });
-    current.error([pm](std::exception_ptr v) -> void { pm.reject(v); });
+    current.error([pm](const std::exception_ptr& v) -> void { pm.reject(v); });
   }
 };
 template <typename ResultType>
-struct _promise_all<ResultType, 0> {
+struct promise_all<ResultType, 0> {
   template <typename T>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
@@ -842,7 +832,7 @@ struct _promise_all<ResultType, 0> {
         }
       }
     });
-    current.error([pm](std::exception_ptr v) -> void { pm.reject(v); });
+    current.error([pm](const std::exception_ptr& v) -> void { pm.reject(v); });
   }
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
@@ -850,97 +840,115 @@ struct _promise_all<ResultType, 0> {
                            const promise<void>& current) {
     current.then([result, done_count, pm]() -> void {
       if (result) {
-        std::get<0>(*result) = nullptr;
+        std::get<0>(*result) = monostate();
         if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
           pm.resolve(std::move(*result));
         }
       }
     });
-    current.error([pm](std::exception_ptr v) -> void { pm.reject(v); });
+    current.error([pm](const std::exception_ptr& v) -> void { pm.reject(v); });
+  }
+};
+template <size_t TOTAL, size_t N>
+struct promise_any {
+  template <typename T, typename ResultType, typename... Args>
+  static inline void apply(
+      const promise<ResultType>& pm,
+      const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>& exce,
+      const std::shared_ptr<size_t>& fail_count, const promise<T>& current,
+      Args&&... args) {
+    promise_any<TOTAL, N - 1>::apply(pm, exce, fail_count,
+                                     std::forward<Args>(args)...);
+    current.then([pm](const T& v) { pm.resolve(v); });
+    current.error([pm, fail_count, exce](const std::exception_ptr& v) {
+      (*exce)[N] = v;
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(std::make_exception_ptr(std::move(*exce)));
+      }
+    });
+  }
+  template <typename ResultType, typename... Args>
+  static inline void apply(
+      const promise<ResultType>& pm,
+      const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>& exce,
+      const std::shared_ptr<size_t>& fail_count, const promise<void>& current,
+      Args&&... args) {
+    promise_any<TOTAL, N - 1>::apply(pm, exce, fail_count,
+                                     std::forward<Args>(args)...);
+    current.then([pm]() { pm.resolve(monostate()); });
+    current.error([pm, fail_count, exce](const std::exception_ptr& v) {
+      (*exce)[N] = v;
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(std::make_exception_ptr(std::move(*exce)));
+      }
+    });
   }
 };
 template <size_t TOTAL>
-struct _promise_any {
-  template <typename T, typename... Args>
-  static inline void apply(const promise<any>& pm,
-                           const std::shared_ptr<size_t>& fail_count,
+struct promise_any<TOTAL, 0> {
+  template <typename ResultType, typename T>
+  static void apply(
+      const promise<ResultType>& pm,
+      const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>& exce,
+      const std::shared_ptr<size_t>& fail_count, const promise<T>& current) {
+    current.then([pm](const T& v) { pm.resolve(v); });
+    current.error([pm, fail_count, exce](const std::exception_ptr& v) {
+      (*exce)[0] = v;
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(std::make_exception_ptr(std::move(*exce)));
+      }
+    });
+  }
+  template <typename ResultType>
+  static void apply(
+      const promise<ResultType>& pm,
+      const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>& exce,
+      const std::shared_ptr<size_t>& fail_count, const promise<void>& current) {
+    current.then([pm]() { pm.resolve(monostate()); });
+    current.error([pm, fail_count, exce](const std::exception_ptr& v) {
+      (*exce)[0] = v;
+      if ((++(*fail_count)) == TOTAL) {
+        pm.reject(std::make_exception_ptr(std::move(*exce)));
+      }
+    });
+  }
+};
+struct promise_race {
+  template <typename ResultType, typename T, typename... Args>
+  static inline void apply(const promise<ResultType>& pm,
                            const promise<T>& current, Args&&... args) {
-    _promise_any<TOTAL>::apply(pm, fail_count, std::forward<Args>(args)...);
+    promise_race::apply(pm, std::forward<Args>(args)...);
     current.then([pm](const T& v) { pm.resolve(v); });
-    current.error([pm, fail_count](std::exception_ptr v) {
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(v);
-      }
-    });
+    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
   }
-  template <typename... Args>
-  static inline void apply(const promise<any>& pm,
-                           const std::shared_ptr<size_t>& fail_count,
+  template <typename ResultType, typename... Args>
+  static inline void apply(const promise<ResultType>& pm,
                            const promise<void>& current, Args&&... args) {
-    _promise_any<TOTAL>::apply(pm, fail_count, std::forward<Args>(args)...);
-    current.then([pm]() { pm.resolve(any()); });
-    current.error([pm, fail_count](std::exception_ptr v) {
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(v);
-      }
-    });
+    promise_race::apply(pm, std::forward<Args>(args)...);
+    current.then([pm]() { pm.resolve(monostate()); });
+    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
   }
-  template <typename T>
-  static void apply(const promise<any>& pm,
-                    const std::shared_ptr<size_t>& fail_count,
-                    const promise<T>& current) {
+  template <typename ResultType, typename T>
+  static void apply(const promise<ResultType>& pm, const promise<T>& current) {
     current.then([pm](const T& v) { pm.resolve(v); });
-    current.error([pm, fail_count](std::exception_ptr v) {
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(v);
-      }
-    });
+    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
   }
-  static void apply(const promise<any>& pm,
-                    const std::shared_ptr<size_t>& fail_count,
+  template <typename ResultType>
+  static void apply(const promise<ResultType>& pm,
                     const promise<void>& current) {
-    current.then([pm]() { pm.resolve(any()); });
-    current.error([pm, fail_count](std::exception_ptr v) {
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(v);
-      }
-    });
-  }
-};
-struct _promise_race {
-  template <typename T, typename... Args>
-  static inline void apply(const promise<any>& pm, const promise<T>& current,
-                           Args&&... args) {
-    _promise_race::apply(pm, std::forward<Args>(args)...);
-    current.then([pm](const T& v) { pm.resolve(v); });
-    current.error([pm](std::exception_ptr v) { pm.reject(v); });
-  }
-  template <typename... Args>
-  static inline void apply(const promise<any>& pm, const promise<void>& current,
-                           Args&&... args) {
-    _promise_race::apply(pm, std::forward<Args>(args)...);
-    current.then([pm]() { pm.resolve(any()); });
-    current.error([pm](std::exception_ptr v) { pm.reject(v); });
-  }
-  template <typename T>
-  static void apply(const promise<any>& pm, const promise<T>& current) {
-    current.then([pm](const T& v) { pm.resolve(v); });
-    current.error([pm](std::exception_ptr v) { pm.reject(v); });
-  }
-  static void apply(const promise<any>& pm, const promise<void>& current) {
-    current.then([pm]() { pm.resolve(any()); });
-    current.error([pm](std::exception_ptr v) { pm.reject(v); });
+    current.then([pm]() { pm.resolve(monostate()); });
+    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
   }
 };
 template <typename ResultType, size_t N>
-struct _promise_all_settled {
+struct promise_all_settled {
   template <typename T, typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
                            const std::shared_ptr<size_t>& done_count,
                            const promise<T>& current, Args&&... args) {
-    _promise_all_settled<ResultType, N - 1>::apply(pm, result, done_count,
-                                                   std::forward<Args>(args)...);
+    promise_all_settled<ResultType, N - 1>::apply(pm, result, done_count,
+                                                  std::forward<Args>(args)...);
     current.finally([result, done_count, current, pm]() -> void {
       if (result) {
         std::get<N>(*result) = current;
@@ -952,7 +960,7 @@ struct _promise_all_settled {
   }
 };
 template <typename ResultType>
-struct _promise_all_settled<ResultType, 0> {
+struct promise_all_settled<ResultType, 0> {
   template <typename T>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
@@ -980,31 +988,37 @@ namespace gather {
  */
 template <typename... Args>
 static inline promise<
-    std::tuple<typename detail::replace_void<Args, std::nullptr_t>::type...>>
+    std::tuple<typename detail::replace_void<Args, monostate>::type...>>
 all(const promise<Args>&... args) {
   using ResultType =
-      std::tuple<typename detail::replace_void<Args, std::nullptr_t>::type...>;
+      std::tuple<typename detail::replace_void<Args, monostate>::type...>;
   promise<ResultType> pm;
   std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
   std::shared_ptr<size_t> done_count = std::make_shared<size_t>(0);
-  detail::_promise_all<ResultType, sizeof...(Args) - 1>::apply(
+  detail::promise_all<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;
 }
 /**
  * @brief 在任意一个 promise 完成后 resolve。返回一个回调用 Promise。若全部
- * promise 都失败，则返回的 promise 也失败。 注意：因为无法确定哪个 promise
- * 先返回，而 promise::any 允许不同返回值的 Promise，故无法取得返回值。
+ * promise 都失败，则返回的 promise 也失败。
  *
  * @tparam Args 返回类型
  * @param arg 多个 Promise。跟返回类型有关。
- * @return promise<void> 回调用 Promise。
+ * @return promise<awacorn::variant<Args...>> 回调用 Promise。
  */
 template <typename... Args>
-static inline promise<awacorn::any> any(const promise<Args>&... args) {
-  promise<awacorn::any> pm;
+static inline promise<
+    awacorn::variant<typename detail::replace_void<Args, monostate>::type...>>
+any(const promise<Args>&... args) {
+  promise<
+      awacorn::variant<typename detail::replace_void<Args, monostate>::type...>>
+      pm;
   std::shared_ptr<size_t> fail_count = std::make_shared<size_t>(0);
-  detail::_promise_any<sizeof...(Args)>::apply(pm, fail_count, args...);
+  std::shared_ptr<std::array<std::exception_ptr, sizeof...(Args)>> exce =
+      std::make_shared<std::array<std::exception_ptr, sizeof...(Args)>>();
+  detail::promise_any<sizeof...(Args), sizeof...(Args) - 1>::apply(
+      pm, exce, fail_count, args...);
   return pm;
 }
 /**
@@ -1018,9 +1032,13 @@ static inline promise<awacorn::any> any(const promise<Args>&... args) {
  * @return promise<void> 回调用 Promise。
  */
 template <typename... Args>
-static inline promise<awacorn::any> race(const promise<Args>&... args) {
-  promise<awacorn::any> pm;
-  detail::_promise_race::apply(pm, args...);
+static inline promise<
+    awacorn::variant<typename detail::replace_void<Args, monostate>::type...>>
+race(const promise<Args>&... args) {
+  promise<
+      awacorn::variant<typename detail::replace_void<Args, monostate>::type...>>
+      pm;
+  detail::promise_race::apply(pm, args...);
   return pm;
 }
 /**
@@ -1039,7 +1057,7 @@ static inline promise<std::tuple<promise<Args>...>> all_settled(
   promise<ResultType> pm;
   std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
   std::shared_ptr<size_t> done_count = std::make_shared<size_t>(0);
-  detail::_promise_all_settled<ResultType, sizeof...(Args) - 1>::apply(
+  detail::promise_all_settled<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;
 }
