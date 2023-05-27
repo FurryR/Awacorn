@@ -1,6 +1,6 @@
 # event
 
-:watch: `event` 是 Awacorn 的事件调度组件，负责实现定时。
+:watch: `event` 是 awacorn 的事件调度组件，负责实现定时。
 
 ## 目录
 
@@ -9,6 +9,7 @@
   - [`awacorn::event_loop`](#awacornevent_loop)
     - [`event` / `interval`](#event--interval)
     - [`clear`](#clear)
+    - [`set_yield`](#set_yield)
     - [`current`](#current)
     - [`start`](#start)
   - [`awacorn::task_t`](#awacorntask_t)
@@ -89,6 +90,18 @@ int main() {
 - :recycle: 一个事件就算清除它自身 (`ev.clear(ev.current())`) 也不会导致未定义行为。
   - 相反，如果循环事件要清除自身，`ev.clear(ev.current())` 还是最佳实践。
 
+### `set_yield`
+
+:sleeping: 设置 **yield 实现**。
+
+在加入 `set_yield` 函数以前，兼容 awacorn 异步 I/O 实现通常是利用一个定时循环事件 (比如 7ms) 中进行一段较短时间的 `poll / epoll` 调用 (比如 7ms)。这样将阻塞整个循环并且拖慢运行速度，同时也不够精确。
+
+在加入 `set_yield` 函数以后，I/O 实现可以通过替换 **yield 实现** 来实现事件循环空闲时进行 I/O 操作，使其变得更加精确且不影响事件循环运行。
+
+**yield 实现** 将接受一个 `const std::chrono::steady_clock::duration&` 作为 **参考** 的睡眠时间，这意味着函数并不需要睡眠那么久，或者可以睡眠更久(这可能会影响精度)。当 **yield 实现** 提前返回(比如读取到 I/O 事件)，则会立刻尝试触发事件。
+
+实际的经过时间并不完全取决于 **参考** 时间，而是取决于 **yield 实现** 函数的运行时间(**实际** 时间)，这样做可以提高事件循环精度。
+
 ### `current`
 
 :rainbow: 获取当前正在执行的任务。返回 `awacorn::task_t`，**可用于取消事件**。
@@ -110,7 +123,7 @@ int main() {
 
 ### `start`
 
-:hearts: 启动事件循环，然后享受 Awacorn。
+:hearts: 启动事件循环，然后享受 awacorn。
 
 :warning: 警告: 这是一个阻塞函数，会阻塞到事件循环结束为止。
 

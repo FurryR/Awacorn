@@ -1,8 +1,8 @@
-# <p align="center">Awacorn</p>
+# <p align="center">awacorn</p>
 
 [![CodeFactor](https://www.codefactor.io/repository/github/furryr/awacorn/badge)](https://www.codefactor.io/repository/github/furryr/awacorn)
 
-<p align="center">Awacorn 是一个 C++ 11 的有栈协程/调度实现，总体偏向 Javascript。</p>
+<p align="center">awacorn 是一个 C++ 11 的有栈协程/调度实现，总体偏向 Javascript。</p>
 
 ```cpp
 int main() {
@@ -21,18 +21,18 @@ int main() {
 
 ## 目录
 
-- [Awacorn](#awacorn)
+- [awacorn](#awacorn)
   - [目录](#目录)
-  - [什么是 Awacorn](#什么是-awacorn)
+  - [什么是 awacorn](#什么是-awacorn)
   - [区别](#区别)
   - [编译](#编译)
   - [文档](#文档)
 
 ---
 
-## 什么是 Awacorn
+## 什么是 awacorn
 
-Awacorn 是一个异步编程库，包含以下内容:
+awacorn 是一个异步编程库，包含以下内容:
 
 - [x] 事件循环
 - [x] 类 Javascript `Promise`
@@ -42,21 +42,21 @@ Awacorn 是一个异步编程库，包含以下内容:
 
 ## 区别
 
-Awacorn 和通常的 C++ 协程有什么区别？
+awacorn 和通常的 C++ 协程有什么区别？
 
 表现为以下形式：
 
-1. [x] Awacorn 的协程不和调度器绑定。
+1. [x] awacorn 的协程不和调度器绑定。
    - :v: 你可以将 `promise` 和 `async` 单独拿出来使用，他们并不依赖 `event`。
-2. [x] Awacorn 是基于 `await`/`async` 的。
+2. [x] awacorn 是基于 `await`/`async` 的。
    - :x: 一般的协程库会 **劫持** 你的函数调用，这样你就感觉不到你在用协程。比如 **libgo** 或者 **libco**。缺点就是 **channel 泛滥**，非常难看。
-   - :white_check_mark: Awacorn 基于 `await`/`async` 模式，且不劫持任何系统调用。你可以自己实现异步接口。
-3. [x] Awacorn 活用了 C++ 11 的元编程特性，以及智能指针。
+   - :white_check_mark: awacorn 基于 `await`/`async` 模式，且不劫持任何系统调用。你可以自己实现异步接口。
+3. [x] awacorn 活用了 C++ 11 的元编程特性，以及智能指针。
    - :mag: 参见 `promise` 及 `async` 的返回值及 `await` 处理。
 
 ## 编译
 
-以下是 Awacorn 支持的编译选项。
+以下是 awacorn 支持的编译选项。
 
 | 选项                    | 描述                                                              | 要求                       |
 | ----------------------- | ----------------------------------------------------------------- | -------------------------- |
@@ -64,7 +64,7 @@ Awacorn 和通常的 C++ 协程有什么区别？
 | -DAWACORN_USE_BOOST     | :construction: 使用 `boost::context::continuation` 作为协程实现。 | `boost_context`            |
 | -DAWACORN_USE_UCONTEXT  | :construction: 使用 `ucontext_t` 作为协程实现。                   | `ucontext.h` (libucontext) |
 
-:bulb: 提示: 当 `-DAWACORN_USE_BOOST` 和 `-DAWACORN_USE_UCONTEXT` 均未被指定时，Awacorn 将自动指定最优实现。
+:bulb: 提示: 当 `-DAWACORN_USE_BOOST` 和 `-DAWACORN_USE_UCONTEXT` 均未被指定时，awacorn 将自动指定最优实现。
 
 :warning: 警告: 当 `boost` 和 `ucontext` 均无法使用时，编译将失败。请安装 `libucontext` 或 `libboost`。
 
@@ -77,19 +77,19 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 ## 文档
 
-以下是 Awacorn 的组件大览。
+以下是 awacorn 的组件大览。
 
 | 组件名     | 描述                                            | 依赖                                | 文档                                   |
 | ---------- | ----------------------------------------------- | ----------------------------------- | -------------------------------------- |
-| `event`    | Awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: <br>[event](doc/event.md)      |
+| `event`    | awacorn 的事件循环，负责调度定时事件。          | void                                | :tiger: <br>[event](doc/event.md)      |
 | `promise`  | 类似于 Javascript 的 Promise，低成本 & 强类型。 | void                                | :wolf: <br>[promise](doc/promise.md)   |
 | `async`    | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | :cat: <br>[async](doc/async.md)        |
-| `function` | Awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: <br>[function](doc/function.md) |
-| `capture`  | Awacorn 采用的内部万能捕获实现。                | void                                | :ox: <br>[capture](doc/capture.md)     |
+| `function` | awacorn 采用的内部 `std::function` 实现。       | void                                | :bear: <br>[function](doc/function.md) |
+| `capture`  | awacorn 采用的内部万能捕获实现。                | void                                | :ox: <br>[capture](doc/capture.md)     |
 
 :beginner: 点击 **文档** 即可查看组件相关的 **详细文档**。
 
 ---
 
-_<p align="center"> Awacorn version 3.1.0. </p>_
+_<p align="center"> awacorn version 3.1.0. </p>_
 _<p align="center"> This program was under the [MIT](./LICENSE) license. </p>_

@@ -2,7 +2,7 @@
 #define _AWACORN_PROMISE
 #if __cplusplus >= 201101L
 /**
- * Project Awacorn 基于 MIT 协议开源。
+ * Project awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
 #include <array>
@@ -524,7 +524,7 @@ struct promise : detail::basic_promise {
     _promise(const _promise& val) = delete;
 
    private:
-    void reset() {
+    inline void reset() {
       _then = type();
       _error = error_type();
       _finally = finally_type();

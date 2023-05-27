@@ -2,7 +2,7 @@
 #define _AWACORN_EVENT_
 #if __cplusplus >= 201101L
 /**
- * Project Awacorn 基于 MIT 协议开源。
+ * Project awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
 #include <chrono>
@@ -30,7 +30,7 @@ class task_t {
     /**
      * @brief 对于 Interval 是循环间隔，对于 Event 无效。
      */
-    std::chrono::high_resolution_clock::duration timeout;
+    std::chrono::steady_clock::duration timeout;
     /**
      * @brief 用于指定一个事件是一次性事件还是循环事件。
      */
@@ -38,8 +38,7 @@ class task_t {
 
    public:
     template <typename U>
-    explicit event(U&& fn,
-                   const std::chrono::high_resolution_clock::duration& timeout,
+    explicit event(U&& fn, const std::chrono::steady_clock::duration& timeout,
                    bool interval)
         : fn(std::forward<U>(fn)), timeout(timeout), interval(interval) {}
     event(const event&) = delete;
@@ -60,40 +59,61 @@ class task_t {
   friend class event_loop;
 };
 /**
+ * @brief 默认 yield 实现。
+ *
+ * @param tm 预期可用时间。
+ */
+void yield_for(const std::chrono::steady_clock::duration& tm) noexcept {
+  std::this_thread::sleep_for(tm);
+}
+/**
  * @brief 事件循环。
  */
 class event_loop {
   std::list<task_t::event> _event;
   std::list<task_t::event>::iterator _current;
-  void _execute() {
-    std::list<task_t::event>::iterator min = _event.end();
-    for (std::list<task_t::event>::iterator it = _event.begin();
-         it != _event.end(); it++) {
-      if (min == _event.end() || it->timeout < min->timeout) min = it;
-    }
-    if (min != _event.cend()) {
-      std::chrono::high_resolution_clock::duration duration = min->timeout;
-      if (duration != std::chrono::high_resolution_clock::duration(0)) {
-        std::this_thread::sleep_for(duration);
+  detail::function<void(const std::chrono::steady_clock::duration&)> _yield;
+  bool _execute() {
+    if (!_event.empty()) {
+      std::list<task_t::event>::const_iterator min = _event.cend();
+      for (std::list<task_t::event>::const_iterator it = _event.cbegin();
+           it != _event.cend(); it++) {
+        if (min == _event.cend() || it->timeout < min->timeout) min = it;
       }
+      std::chrono::steady_clock::time_point tm =
+          std::chrono::steady_clock::now();
+      if (min->timeout > std::chrono::steady_clock::duration(0))
+        _yield(min->timeout);
+      std::chrono::steady_clock::duration duration =
+          std::chrono::steady_clock::now() - tm;
       for (std::list<task_t::event>::iterator it = _event.begin();
-           it != _event.end(); it++)
+           it != _event.end(); it++) {
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
-                          : std::chrono::high_resolution_clock::duration(0);
-      std::chrono::high_resolution_clock::time_point st =
-          std::chrono::high_resolution_clock::now();
-      _current = min;
-      min->fn();
-      if (!min->interval) _event.erase(min);
-      _current = _event.end();
-      duration = std::chrono::high_resolution_clock::now() - st;
+                          : std::chrono::steady_clock::duration(0);
+      }
+      tm = std::chrono::steady_clock::now();
       for (std::list<task_t::event>::iterator it = _event.begin();
-           it != _event.end(); it++)
+           it != _event.end();) {
+        if (it->timeout == std::chrono::steady_clock::duration(0)) {
+          _current = it;
+          it->fn();
+          if (!it->interval) {
+            it = _event.erase(it);
+            continue;
+          }
+        }
+        it++;
+      }
+      duration = std::chrono::steady_clock::now() - tm;
+      for (std::list<task_t::event>::iterator it = _event.begin();
+           it != _event.end(); it++) {
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
-                          : std::chrono::high_resolution_clock::duration(0);
+                          : std::chrono::steady_clock::duration(0);
+      }
     }
+    return !_event.empty();
   }
   template <typename... Args>
   static inline task_t _create(std::list<task_t::event>* list, Args&&... args) {
@@ -102,6 +122,17 @@ class event_loop {
   }
 
  public:
+  /**
+   * @brief 设置 yield 实现。
+   * 
+   * @tparam U 新 yield 实现的类型。
+   * @param impl yield 实现的对象，可以为仿函数对象或者函数指针。
+   */
+  template <typename U>
+  inline void set_yield(U&& impl) noexcept {
+    _yield = detail::function<void(const std::chrono::steady_clock::duration&)>(
+        std::forward<U>(impl));
+  }
   /**
    * @brief 获取当前的事件。
    *
@@ -118,10 +149,10 @@ class event_loop {
    */
   template <typename Rep, typename Period, typename U>
   inline task_t event(U&& fn, const std::chrono::duration<Rep, Period>& tm) {
-    return _create(&_event, std::forward<U>(fn),
-                   std::chrono::duration_cast<
-                       std::chrono::high_resolution_clock::duration>(tm),
-                   false);
+    return _create(
+        &_event, std::forward<U>(fn),
+        std::chrono::duration_cast<std::chrono::steady_clock::duration>(tm),
+        false);
   }
   /**
    * @brief 创建循环事件。
@@ -139,8 +170,7 @@ class event_loop {
           arg_fn.borrow()();
           _current->timeout = tm;
         },
-        std::chrono::duration_cast<
-            std::chrono::high_resolution_clock::duration>(tm),
+        std::chrono::duration_cast<std::chrono::steady_clock::duration>(tm),
         true);
   }
   /**
@@ -159,11 +189,12 @@ class event_loop {
    * @brief 运行事件循环。此函数将在所有事件都运行完成之后返回。
    */
   inline void start() {
-    do {
-      _execute();
-    } while (!_event.empty());
+    while (_execute())
+      ;
   }
-  event_loop() = default;
+  event_loop() : _yield(yield_for) {}
+  template <typename U>
+  event_loop(U&& yield_impl) : _yield(std::forward<U>(yield_impl)) {}
   event_loop(const event_loop&) = delete;
 };
 };  // namespace awacorn

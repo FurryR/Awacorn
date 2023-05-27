@@ -2,7 +2,7 @@
 #define _AWACORN_CAPTURE_HELPER_
 #if __cplusplus >= 201101L
 /**
- * Project Awacorn 基于 MIT 协议开源。
+ * Project awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2022.
  */
 namespace awacorn {

@@ -94,7 +94,7 @@ struct variant {
         new T(std::forward<Arg>(args)...), [](void* v) { delete (T*)v; });
     return *((T*)_ptr.get());
   }
-  void swap(variant& v) {
+  inline void swap(variant& v) noexcept {
     std::swap(v._idx, _idx);
     std::swap(v._ptr, _ptr);
   }
@@ -102,7 +102,9 @@ struct variant {
       : _idx(npos),
         _ptr(nullptr, [](void*) {}),
         _clone([](void*) -> void* { return nullptr; }){};
-  template <typename T>
+  template <typename T,
+            typename = typename std::enable_if<!std::is_same<
+                typename std::decay<T>::type, variant<Args...> >::value>::type>
   variant(T&& v)
       : _idx(detail::type_index<typename std::decay<T>::type, Args...>::value),
         _ptr(new typename std::decay<T>::type(std::forward<T>(v)),
@@ -193,31 +195,31 @@ const T* get_if(const variant<Args...>& v) noexcept {
   return nullptr;
 }
 template <size_t idx, typename... Args>
-auto get(variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
+inline auto get(variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
   auto ptr = get_if<idx>(v);
   if (ptr) return *ptr;
   throw bad_variant_access();
 }
 template <size_t idx, typename... Args>
-auto get(const variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
+inline auto get(const variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
   auto ptr = get_if<idx>(v);
   if (ptr) return *ptr;
   throw bad_variant_access();
 }
 template <typename T, typename... Args>
-auto get(variant<Args...>& v) -> decltype(*get_if<T>(v)) {
+inline auto get(variant<Args...>& v) -> decltype(*get_if<T>(v)) {
   auto ptr = get_if<T>(v);
   if (ptr) return *ptr;
   throw bad_variant_access();
 }
 template <typename T, typename... Args>
-auto get(const variant<Args...>& v) -> decltype(*get_if<T>(v)) {
+inline auto get(const variant<Args...>& v) -> decltype(*get_if<T>(v)) {
   auto ptr = get_if<T>(v);
   if (ptr) return *ptr;
   throw bad_variant_access();
 }
 template <typename T, typename... Args>
-bool holds_alternative(const variant<Args...>& v) noexcept {
+inline bool holds_alternative(const variant<Args...>& v) noexcept {
   static_assert(detail::type_index<T, Args...>::value != (size_t)-1,
                 "ill-formed cast");
   return v._idx == detail::type_index<T, Args...>::value;

@@ -2,7 +2,7 @@
 #define _AWACORN_ASYNC
 #if __cplusplus >= 201101L
 /**
- * Project Awacorn 基于 MIT 协议开源。
+ * Project awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
 #if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)
@@ -289,7 +289,7 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
  *
  * @tparam U 函数类型。
  * @param fn 函数。
- * @param stack_size 可选，栈的大小(如果可用)。
+ * @param stack_size 可选，栈的大小(字节, 如果可用)。在部分架构上可能要求对齐。
  * @return promise<decltype(fn(std::declval<context&>()))> 用于取得函数返回值的
  * promise 对象。
  */
