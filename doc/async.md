@@ -41,7 +41,7 @@ int main() {
 
 异步上下文。v3.1.0 以后的 `async` 相比旧版本的 `async_generator`(`AsyncGenerator`) 简便、清爽很多。
 
-:bulb: awacorn::context 不可被移动、拷贝、或者构造，只能通过 `async` 函数取得。
+:bulb: `awacorn::context` 不可被移动、拷贝、或者构造，只能通过 `async` 函数取得。
 
 ### `operator>>`
 

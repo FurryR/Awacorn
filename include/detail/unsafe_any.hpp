@@ -1,6 +1,10 @@
 #ifndef _AWACORN_ANY_
 #define _AWACORN_ANY_
 #if __cplusplus >= 201101L
+/**
+ * Project Awacorn 基于 MIT 协议开源。
+ * Copyright(c) 凌 2022.
+ */
 #include <memory>
 namespace awacorn {
 namespace detail {

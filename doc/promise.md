@@ -1,6 +1,6 @@
 # promise
 
-:dizzy: awacorn 异步编程的第一步，堂堂登场！
+:dizzy: Awacorn 异步编程的第一步，堂堂登场！
 
 ## 目录
 
@@ -21,7 +21,7 @@
 
 ## 概念
 
-:hash: `Promise` 直译为 **承诺**，而 awacorn 的 `Promise` 则有点类似于 Javascript `Promise`。
+:hash: `Promise` 直译为 **承诺**，而 Awacorn 的 `Promise` 则有点类似于 Javascript `Promise`。
 
 :closed_book: 在 C++ 制作好用的 `Promise` 这件事，awacorn 并不是第一个，比如下面几个库就实现了可以**链式注册回调函数**的功能：
 
@@ -29,9 +29,9 @@
 - :candy: [promise-cpp](https://github.com/xhawk18/promise-cpp) 是一个符合 A+ 标准的 C++ Promise 实现。
 - :boot: [boost-thread](https://github.com/boostorg/thread) `boost::future` 同样支持 `then`。
 
-:question: 那么 awacorn 为什么要重新造一遍轮子呢？以下是这四个库的不同点对比。
+:question: 那么 Awacorn 为什么要重新造一遍轮子呢？以下是这四个库的不同点对比。
 
-| awacorn                                 | folly                               | promise-cpp                             | boost-thread                        |
+| Awacorn                                 | folly                               | promise-cpp                             | boost-thread                        |
 | --------------------------------------- | ----------------------------------- | --------------------------------------- | ----------------------------------- |
 | :x: 不适用                              | :x: 不适用                          | :white_check_mark: 符合 A+ 标准(~~伪~~) | :x: 不适用                          |
 | :white_check_mark: 编译时强类型支持     | :white_check_mark: 编译时强类型支持 | :x: 弱类型(伪强类型)支持                | :white_check_mark: 编译时强类型支持 |
@@ -44,7 +44,7 @@
 | :white_check_mark: 可中断               | :white_check_mark: 可中断           | :x: 不可中断                            | :white_check_mark: 可中断           |
 | :white_check_mark: Header-only          | :x: 不适用                          | :white_check_mark: Header-only          | :x: 不适用                          |
 
-:trophy: 综合来看，awacorn `Promise` 最适用于当前场景，并且十分容易上手，故 awacorn 采用 `Promise`。
+:trophy: 综合来看，awacorn `Promise` 最适用于当前场景，并且十分容易上手，故 Awacorn 采用 `Promise`。
 
 ## `awacorn::promise`
 
@@ -162,4 +162,4 @@ int main() {
 
 实现了一小部分的 `std::variant` 接口，请尽情使用。
 
-:warning: 注意: 在 C++ 11 上请确保使用 **awacorn::variant** 而不是其它的 variant 实现，因为使用其它的 variant 容器可能导致跟 awacorn 不兼容。如果实在是要使用指定实现，请**更改 awacorn 源代码**。
+:warning: 注意: 在 C++ 11 上请确保使用 **awacorn::variant** 而不是其它的 variant 实现，因为使用其它的 variant 容器可能导致跟 Awacorn 不兼容。如果实在是要使用指定实现，请**更改 Awacorn 源代码**。

@@ -2,7 +2,7 @@
 #define _AWACORN_PROMISE
 #if __cplusplus >= 201101L
 /**
- * Project awacorn 基于 MIT 协议开源。
+ * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
 #include <array>

@@ -1,6 +1,6 @@
 # event
 
-:watch: `event` 是 awacorn 的事件调度组件，负责实现定时。
+:watch: `event` 是 Awacorn 的事件调度组件，负责实现定时。
 
 ## 目录
 
@@ -94,7 +94,7 @@ int main() {
 
 :sleeping: 设置 **yield 实现**。
 
-在加入 `set_yield` 函数以前，兼容 awacorn 异步 I/O 实现通常是利用一个定时循环事件 (比如 7ms) 中进行一段较短时间的 `poll / epoll` 调用 (比如 7ms)。这样将阻塞整个循环并且拖慢运行速度，同时也不够精确。
+在加入 `set_yield` 函数以前，兼容 Awacorn 异步 I/O 实现通常是利用一个定时循环事件 (比如 7ms) 中进行一段较短时间的 `poll / epoll` 调用 (比如 7ms)。这样将阻塞整个循环并且拖慢运行速度，同时也不够精确。
 
 在加入 `set_yield` 函数以后，I/O 实现可以通过替换 **yield 实现** 来实现事件循环空闲时进行 I/O 操作，使其变得更加精确且不影响事件循环运行。
 

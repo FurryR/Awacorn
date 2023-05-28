@@ -1,6 +1,6 @@
 # capture
 
-:briefcase: `capture` 是 awacorn 用于实现在 C++ 11 进行移动构造/完美转发捕获的类型。
+:briefcase: `capture` 是 Awacorn 用于实现在 C++ 11 进行移动构造/完美转发捕获的类型。
 
 ## 目录
 
@@ -75,4 +75,4 @@ int main() {
 
 ## 注意事项
 
-:warning: `awacorn::detail` 命名空间内的成员均是 awacorn 的 **内部类**，擅自使用会导致 **可移植性降低**，并且我们也不推荐这么做。
+:warning: `awacorn::detail` 命名空间内的成员均是 Awacorn 的 **内部类**，擅自使用会导致 **可移植性降低**，并且我们也不推荐这么做。

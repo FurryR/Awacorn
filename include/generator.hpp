@@ -3,7 +3,7 @@
 #warning This header is currently deprecated.
 #if __cplusplus >= 201101L
 /**
- * Project awacorn 基于 MIT 协议开源。
+ * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
 #if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)

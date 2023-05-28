@@ -1,78 +1,88 @@
 cmake_minimum_required(VERSION 3.10)
 project(
-  awacorn
+  Awacorn
   VERSION 3.1.0
   LANGUAGES CXX)
-add_library(awacorn INTERFACE)
-set(CMAKE_CXX_STANDARD 11)
-target_compile_features(awacorn INTERFACE cxx_std_11)
-target_include_directories(awacorn
-                           INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+include(GNUInstallDirs)
 include(CMakeDependentOption)
-option(AWACORN_BUILD_EXAMPLE "Also build examples (and tests)." ON)
-cmake_dependent_option(AWACORN_USE_BOOST "Use boost as generator." OFF
-                       "AWACORN_USE_UCONTEXT" OFF)
-cmake_dependent_option(AWACORN_USE_UCONTEXT "Use ucontext as generator." OFF
-                       "AWACORN_USE_BOOST" OFF)
-if(NOT AWACORN_USE_BOOST AND NOT AWACORN_USE_UCONTEXT)
+cmake_dependent_option(USE_BOOST "Use boost_context as generator." OFF
+                       "USE_UCONTEXT" OFF)
+cmake_dependent_option(USE_UCONTEXT "Use ucontext as generator." OFF
+                       "USE_BOOST" OFF)
+if(NOT USE_BOOST AND NOT USE_UCONTEXT)
   if(Boost_FOUND)
-    set(AWACORN_USE_BOOST ON)
+    set(USE_BOOST ON)
   else()
     if(NOT Boost_FOUND)
-      find_package(Boost REQUIRED COMPONENTS coroutine context)
+      find_package(Boost REQUIRED COMPONENTS context)
     endif()
     if(Boost_FOUND)
-      set(AWACORN_USE_BOOST ON)
+      set(USE_BOOST ON)
     else()
-      set(AWACORN_USE_UCONTEXT ON)
+      set(USE_UCONTEXT ON)
     endif()
   endif()
 endif()
-if(AWACORN_USE_BOOST)
+if(USE_BOOST)
   if(NOT Boost_FOUND)
-    find_package(Boost REQUIRED COMPONENTS coroutine context)
+    find_package(Boost REQUIRED COMPONENTS context)
   endif()
   if(NOT Boost_FOUND)
-    message(FATAL_ERROR "boost not found, failed")
+    message(
+      FATAL_ERROR
+        "Awacorn does not work properly without \"boost_context\". Please install package \"boost_context\" to continue."
+    )
   endif()
-  include_directories(${Boost_INCLUDE_DIRS})
-  link_directories(${Boost_LIBRARY_DIRS})
-  message("Using boost as generator.")
-  add_definitions(-DAWACORN_USE_BOOST)
-elseif(AWACORN_USE_UCONTEXT)
-  message("Using ucontext as generator.")
-  add_definitions(-DAWACORN_USE_UCONTEXT)
-else()
-  message(FATAL_ERROR "did not specify a library, failed")
+  message("Awacorn is using \"boost_context\" as coroutine.")
+elseif(USE_UCONTEXT)
+  message("Awacorn is using \"ucontext\" as coroutine.")
 endif()
-if(AWACORN_BUILD_EXAMPLE)
-  add_compile_options(-Wall -Wextra -g)
-  # Example
-  add_executable(timer include example/timer.cpp)
-  add_executable(hello-world include example/hello-world.cpp)
-  add_executable(then include example/then.cpp)
-  # Test
-  add_executable(test-coroutine include test/test-coroutine.cpp)
-  add_executable(test-promise include test/performance/test-promise.cpp)
-  if(AWACORN_USE_BOOST)
-    # Example
-    target_link_libraries(timer PRIVATE awacorn boost_coroutine boost_context)
-    target_link_libraries(hello-world PRIVATE awacorn boost_coroutine
-                                              boost_context)
-    target_link_libraries(then PRIVATE awacorn boost_coroutine boost_context)
-    # Test
-    target_link_libraries(test-coroutine PRIVATE awacorn boost_coroutine
-                                                 boost_context)
-    target_link_libraries(test-promise PRIVATE awacorn boost_coroutine
-                                               boost_context)
-  else()
-    # Example
-    target_link_libraries(timer PRIVATE awacorn)
-    target_link_libraries(hello-world PRIVATE awacorn)
-    target_link_libraries(then PRIVATE awacorn)
-    # Test
-    target_link_libraries(test-coroutine PRIVATE awacorn)
-    target_link_libraries(test-promise PRIVATE awacorn)
-  endif()
+# 创建 Awacorn 库
+add_library(${PROJECT_NAME} INTERFACE)
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
+target_include_directories(
+  ${PROJECT_NAME}
+  INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+# 安装 targets
+install(
+  TARGETS ${PROJECT_NAME}
+  EXPORT AwacornTargets
+  INCLUDES ${CMAKE_INSTALL_INCLUDEDIR})
+# 安装头文件
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/awacorn)
+# 导出并安装 export 文件
+install(
+  EXPORT ${PROJECT_NAME}Targets
+  FILE ${PROJECT_NAME}Targets.cmake
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/awacorn)
+include(CMakePackageConfigHelpers)
+# 创建版本
+write_basic_package_version_file(
+  "${PROJECT_NAME}ConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY AnyNewerVersion)
+if(NOT INCLUDE_INSTALL_DIR)
+  set(INCLUDE_INSTALL_DIR include)
 endif()
-install()
+# 创建 config
+configure_package_config_file(
+  "${PROJECT_SOURCE_DIR}/cmake/${PROJECT_NAME}Config.cmake.in"
+  "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+  INSTALL_DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/awacorn
+  PATH_VARS INCLUDE_INSTALL_DIR)
+# 安装 config
+install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+              "${PROJECT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/cmake/awacorn)
+# 生成导出 targets
+export(EXPORT ${PROJECT_NAME}Targets
+       FILE "${CMAKE_CURRENT_BINARY_DIR}/cmake/${PROJECT_NAME}Targets.cmake")
+# 启动测试
+include(CTest)
+option(BUILD_TEST "Also build examples and tests." ON)
+if(${BUILD_TEST})
+  enable_testing()
+  add_subdirectory(test)
+endif()

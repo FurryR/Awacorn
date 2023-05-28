@@ -2,7 +2,7 @@
 #define _AWACORN_ASYNC
 #if __cplusplus >= 201101L
 /**
- * Project awacorn 基于 MIT 协议开源。
+ * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
 #if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)
@@ -170,7 +170,7 @@ struct async_fn : basic_async_fn<RetType(context&)>,
         promise<RetType> pm;
         promise<detail::unsafe_any> tmp =
             detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
-        tmp.then([ref, pm](std::exception_ptr res) {
+        tmp.then([ref, pm](const detail::unsafe_any& res) {
              ref->ctx._result = res;
              ref->_await_next()
                  .then([pm](const RetType& res) { pm.resolve(res); })

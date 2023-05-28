@@ -1,6 +1,10 @@
 #ifndef _AWACORN_VARIANT_
 #define _AWACORN_VARIANT_
 #if __cplusplus >= 201101L
+/**
+ * Project Awacorn 基于 MIT 协议开源。
+ * Copyright(c) 凌 2022.
+ */
 #if __cplusplus >= 201703L
 #include <variant>
 #else
@@ -10,47 +14,50 @@
 #endif
 namespace awacorn {
 #if __cplusplus >= 201703L
-using variant = std::variant;
+template <typename... Args>
+using variant = std::variant<Args...>;
 using bad_variant_caccess = std::bad_variant_access;
 using monostate = std::monostate;
 template <size_t I, typename... Args>
-constexpr auto get_if(variant<Args...>& v)
-    -> decltype(std::get_if<I>(v)) noexcept {
+constexpr auto get_if(std::variant<Args...>& v) noexcept
+    -> decltype(std::get_if<I>(v)) {
   return std::get_if<I>(v);
 }
 template <size_t I, typename... Args>
-constexpr auto get_if(const variant<Args...>& v)
-    -> decltype(std::get_if<I>(v)) noexcept {
+constexpr auto get_if(const std::variant<Args...>& v) noexcept
+    -> decltype(std::get_if<I>(v)) {
   return std::get_if<I>(v);
 }
 template <typename T, typename... Args>
-constexpr auto get_if(variant<Args...>& v)
-    -> decltype(std::get_if<T>(v)) noexcept {
+constexpr auto get_if(std::variant<Args...>& v) noexcept
+    -> decltype(std::get_if<T>(v)) {
   return std::get_if<T>(v);
 }
 template <typename T, typename... Args>
-constexpr auto get_if(const variant<Args...>& v)
-    -> decltype(std::get_if<T>(v)) noexcept {
+constexpr auto get_if(const std::variant<Args...>& v) noexcept
+    -> decltype(std::get_if<T>(v)) {
   return std::get_if<T>(v);
 }
 template <size_t I, typename... Args>
-constexpr auto get(variant<Args...>& v) -> decltype(std::get_if<I>(v)) {
+constexpr auto get(std::variant<Args...>& v) -> decltype(std::get_if<I>(v)) {
   return std::get<I>(v);
 }
 template <size_t I, typename... Args>
-constexpr auto get(const variant<Args...>& v) -> decltype(std::get_if<I>(v)) {
+constexpr auto get(const std::variant<Args...>& v)
+    -> decltype(std::get_if<I>(v)) {
   return std::get<I>(v);
 }
 template <typename T, typename... Args>
-constexpr auto get(variant<Args...>& v) -> decltype(std::get_if<T>(v)) {
+constexpr auto get(std::variant<Args...>& v) -> decltype(std::get_if<T>(v)) {
   return std::get<T>(v);
 }
 template <typename T, typename... Args>
-constexpr auto get(const variant<Args...>& v) -> decltype(std::get_if<T>(v)) {
+constexpr auto get(const std::variant<Args...>& v)
+    -> decltype(std::get_if<T>(v)) {
   return std::get<T>(v);
 }
 template <typename T, typename... Args>
-constexpr bool holds_alternative(const variant<Args...>& v) {
+constexpr bool holds_alternative(const std::variant<Args...>& v) {
   return std::holds_alternative<T>(v);
 }
 #else
