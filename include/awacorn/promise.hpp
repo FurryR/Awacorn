@@ -543,14 +543,15 @@ struct promise : detail::basic_promise {
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 promise 完成以后再 resolve。
    *
+   * @tparam U 函数类型。
    * @param fn 要执行的函数。
-   * @return promise<Ret> 对函数的 promise
+   * @return promise<typename detail::remove_promise<
+      decltype(fn(std::declval<value_type>())), promise>::type 对函数的 promise
    */
   template <typename U>
-  inline promise<typename detail::remove_promise<
-      decltype(std::declval<U>()(std::declval<value_type>())), promise>::type>
-  then(U&& fn) const {
-    using Ret = decltype(std::declval<U>()(std::declval<value_type>()));
+  inline auto then(U&& fn) const -> promise<typename detail::remove_promise<
+      decltype(fn(std::declval<value_type>())), promise>::type> {
+    using Ret = decltype(fn(std::declval<value_type>()));
     return __then_impl<Ret, value_type, promise, _promise>::apply(
         pm, std::forward<U>(fn));
   }
@@ -559,15 +560,16 @@ struct promise : detail::basic_promise {
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 promise 完成以后再 resolve。
    *
+   * @tparam U 函数类型。
    * @param fn 要执行的函数。
-   * @return promise<Ret> 对函数的 Promise。
+   * @return promise<typename detail::remove_promise<
+      decltype(fn(std::declval<std::exception_ptr>())),
+      promise>::type> 对函数的 Promise。
    */
   template <typename U>
-  inline promise<typename detail::remove_promise<
-      decltype(std::declval<U>()(std::declval<std::exception_ptr>())),
-      promise>::type>
-  error(U&& fn) const {
-    using Ret = decltype(std::declval<U>()(std::declval<std::exception_ptr>()));
+  inline auto error(U&& fn) const -> promise<typename detail::remove_promise<
+      decltype(fn(std::declval<std::exception_ptr>())), promise>::type> {
+    using Ret = decltype(fn(std::declval<std::exception_ptr>()));
     return __error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
   }
   /**
@@ -576,14 +578,16 @@ struct promise : detail::basic_promise {
    * 的返回值。返回一个对这个函数的 Promise，当函数返回时，Promise 被
    * resolve。如果返回一个 Promise，则会等待这个 promise 完成以后再 resolve。
    *
+   * @tparam U 函数类型。
    * @param fn 要执行的函数。
-   * @return promise<Ret> 对函数的 Promise。
+   * @return promise<typename detail::remove_promise<decltype(fn()),
+                                                 promise>::type> 对函数的
+   Promise。
    */
   template <typename U>
-  inline promise<typename detail::remove_promise<decltype(std::declval<U>()()),
-                                                 promise>::type>
-  finally(U&& fn) const {
-    using Ret = decltype(std::declval<U>()());
+  inline auto finally(U&& fn) const -> promise<
+      typename detail::remove_promise<decltype(fn()), promise>::type> {
+    using Ret = decltype(fn());
     return __finally_impl<Ret, promise, _promise>::apply(pm,
                                                          std::forward<U>(fn));
   }
@@ -713,14 +717,16 @@ class promise<void> : detail::basic_promise {
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 promise 完成以后再 resolve。
    *
+   * @tparam U 函数类型。
    * @param fn 要执行的函数。
-   * @return promise<Ret> 对函数的 promise
+   * @return promise<typename detail::remove_promise<decltype(fn()),
+                                                 promise>::type> 对函数的
+   promise
    */
   template <typename U>
-  inline promise<typename detail::remove_promise<decltype(std::declval<U>()()),
-                                                 promise>::type>
-  then(U&& fn) const {
-    using Ret = decltype(std::declval<U>()());
+  inline auto then(U&& fn) const -> promise<
+      typename detail::remove_promise<decltype(fn()), promise>::type> {
+    using Ret = decltype(fn());
     return __then_impl<Ret, void, promise, _promise>::apply(
         pm, std::forward<U>(fn));
   }
@@ -729,15 +735,16 @@ class promise<void> : detail::basic_promise {
    * Promise，当函数返回时，Promise 被 resolve。如果返回一个
    * Promise，则会等待这个 promise 完成以后再 resolve。
    *
+   * @tparam U 函数类型。
    * @param fn 要执行的函数。
-   * @return promise<Ret> 对函数的 Promise。
+   * @return promise<typename detail::remove_promise<
+      decltype(fn(std::declval<std::exception_ptr>())),
+      promise>::type> 对函数的 Promise。
    */
   template <typename U>
-  inline promise<typename detail::remove_promise<
-      decltype(std::declval<U>()(std::declval<std::exception_ptr>())),
-      promise>::type>
-  error(U&& fn) const {
-    using Ret = decltype(std::declval<U>()(std::declval<std::exception_ptr>()));
+  inline auto error(U&& fn) const -> promise<typename detail::remove_promise<
+      decltype(fn(std::declval<std::exception_ptr>())), promise>::type> {
+    using Ret = decltype(fn(std::declval<std::exception_ptr>()));
     return __error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
   }
   /**
@@ -746,14 +753,16 @@ class promise<void> : detail::basic_promise {
    * 的返回值。返回一个对这个函数的 Promise，当函数返回时，Promise 被
    * resolve。如果返回一个 Promise，则会等待这个 promise 完成以后再 resolve。
    *
+   * @tparam U 函数类型。
    * @param fn 要执行的函数。
-   * @return promise<Ret> 对函数的 Promise。
+   * @return promise<typename detail::remove_promise<decltype(fn()),
+                                                 promise>::type> 对函数的
+   Promise。
    */
   template <typename U>
-  inline promise<typename detail::remove_promise<decltype(std::declval<U>()()),
-                                                 promise>::type>
-  finally(U&& fn) const {
-    using Ret = decltype(std::declval<U>()());
+  inline auto finally(U&& fn) const -> promise<
+      typename detail::remove_promise<decltype(fn()), promise>::type> {
+    using Ret = decltype(fn());
     return __finally_impl<Ret, promise, _promise>::apply(pm,
                                                          std::forward<U>(fn));
   }
