@@ -64,7 +64,9 @@ class task_t {
  * @param tm 预期可用时间。
  */
 void yield_for(const std::chrono::steady_clock::duration& tm) noexcept {
-  std::this_thread::sleep_for(tm);
+  if (tm != std::chrono::steady_clock::duration(0)) {
+    std::this_thread::sleep_for(tm);
+  }
 }
 /**
  * @brief 事件循环。
@@ -112,7 +114,9 @@ class event_loop {
                           ? (it->timeout - duration)
                           : std::chrono::steady_clock::duration(0);
       }
+      return true;
     }
+    _yield(std::chrono::steady_clock::duration(0));
     return !_event.empty();
   }
   template <typename... Args>
