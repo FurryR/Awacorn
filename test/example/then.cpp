@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "awacorn/promise.hpp"
+#include "promise.hpp"
 int main() {
   awacorn::promise<void> pm;  // 生成一个临时的 promise 对象
   std::shared_ptr<int> ptr =

@@ -5,12 +5,45 @@
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2022.
  */
+#include <type_traits>
+#include <variant>
+
+namespace awacorn {
+namespace detail {
+namespace traits {
+template <typename T, typename... Args>
+struct contains : std::integral_constant<bool, false> {};
+template <typename T, typename T2, typename... Args>
+struct contains<T, T2, Args...> : contains<T, Args...> {};
+template <typename T, typename... Args>
+struct contains<T, T, Args...> : std::integral_constant<bool, true> {};
+template <typename W, typename... Ts>
+struct __make_unique_impl {
+  using type = W;
+};
+template <template <typename...> class W, typename... Current, typename T,
+          typename... Ts>
+struct __make_unique_impl<W<Current...>, T, Ts...>
+    : std::conditional<
+          contains<T, Ts...>::value,
+          typename __make_unique_impl<W<Current...>, Ts...>::type,
+          typename __make_unique_impl<W<Current..., T>, Ts...>::type> {};
+template <typename W>
+struct make_unique;
+template <template <typename...> class W, typename... T>
+struct make_unique<W<T...>> : __make_unique_impl<W<>, T...> {};
+using unique_test =
+    typename make_unique<std::variant<int, std::monostate, int>>::type;
+}  // namespace traits
+}  // namespace detail
+}  // namespace awacorn
 #if __cplusplus >= 201703L
+#include <cstddef>
 #include <variant>
 #else
+#include <cstddef>
 #include <exception>
 #include <memory>
-#include <type_traits>
 #endif
 namespace awacorn {
 #if __cplusplus >= 201703L
@@ -111,8 +144,8 @@ struct variant {
         _clone([](void*) -> void* { return nullptr; }){};
   template <typename T,
             typename = typename std::enable_if<!std::is_same<
-                typename std::decay<T>::type, variant<Args...> >::value>::type>
-  variant(T&& v)
+                typename std::decay<T>::type, variant<Args...>>::value>::type>
+  explicit variant(T&& v)
       : _idx(detail::type_index<typename std::decay<T>::type, Args...>::value),
         _ptr(new typename std::decay<T>::type(std::forward<T>(v)),
              [](void* v) { delete (typename std::decay<T>::type*)v; }),

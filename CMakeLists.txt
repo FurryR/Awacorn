@@ -33,8 +33,13 @@ if(USE_BOOST)
         "Awacorn does not work properly without \"boost_context\". Please install package \"boost_context\" to continue."
     )
   endif()
+  include_directories(${Boost_INCLUDE_DIRS})
+  link_directories(${Boost_LIBRARY_DIRS})
+  link_libraries(boost_context)
+  add_definitions(-DAWACORN_USE_BOOST)
   message("Awacorn is using \"boost_context\" as coroutine.")
 elseif(USE_UCONTEXT)
+  add_definitions(-DAWACORN_USE_UCONTEXT)
   message("Awacorn is using \"ucontext\" as coroutine.")
 endif()
 # 创建 Awacorn 库

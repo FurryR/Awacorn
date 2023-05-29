@@ -128,7 +128,7 @@ class event_loop {
  public:
   /**
    * @brief 设置 yield 实现。
-   * 
+   *
    * @tparam U 新 yield 实现的类型。
    * @param impl yield 实现的对象，可以为仿函数对象或者函数指针。
    */

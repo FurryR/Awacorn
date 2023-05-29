@@ -9,7 +9,9 @@
 namespace awacorn {
 namespace detail {
 struct unsafe_any {
-  unsafe_any() : _ptr(nullptr, [](void*) {}), _clone([](void*) -> void* {return nullptr;}) {}
+  unsafe_any()
+      : _ptr(nullptr, [](void*) {}),
+        _clone([](void*) -> void* { return nullptr; }) {}
   template <typename T>
   unsafe_any(T&& v)
       : _ptr(new typename std::decay<T>::type(std::forward<T>(v)),
@@ -21,9 +23,7 @@ struct unsafe_any {
   unsafe_any(const unsafe_any& v)
       : _ptr(v._clone(v._ptr.get()), v._ptr.get_deleter()), _clone(v._clone) {}
   unsafe_any(unsafe_any&& v) : _ptr(std::move(v._ptr)), _clone(v._clone) {
-    v._clone = [](void*) -> void* {
-      return nullptr;
-    };
+    v._clone = [](void*) -> void* { return nullptr; };
   }
   unsafe_any& operator=(const unsafe_any& v) {
     _ptr = std::unique_ptr<void, void (*)(void*)>(v._clone(v._ptr.get()),
@@ -34,9 +34,7 @@ struct unsafe_any {
   unsafe_any& operator=(unsafe_any&& v) {
     _ptr = std::move(v._ptr);
     _clone = v._clone;
-    v._clone = [](void*) -> void* {
-      return nullptr;
-    };
+    v._clone = [](void*) -> void* { return nullptr; };
     return *this;
   }
   template <typename T>

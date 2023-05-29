@@ -1,8 +1,8 @@
 #include <iostream>
 
-#include "awacorn/async.hpp"
-#include "awacorn/event.hpp"
-#include "awacorn/promise.hpp"
+#include "async.hpp"
+#include "event.hpp"
+#include "promise.hpp"
 awacorn::promise<void> sleep(awacorn::event_loop* ev) {
   awacorn::promise<void> pm;
   ev->event([pm]() { pm.resolve(); }, std::chrono::nanoseconds(0));

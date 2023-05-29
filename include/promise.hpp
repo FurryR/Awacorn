@@ -12,7 +12,7 @@
 
 #include "detail/capture.hpp"
 #include "detail/function.hpp"
-#include "detail/variant.hpp"
+#include "variant.hpp"
 namespace awacorn {
 /**
  * @brief promise 的状态。

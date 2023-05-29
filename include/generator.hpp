@@ -31,8 +31,8 @@
 
 #include "detail/function.hpp"
 #include "detail/unsafe_any.hpp"
-#include "detail/variant.hpp"
 #include "promise.hpp"
+#include "variant.hpp"
 
 namespace awacorn {
 struct cancel_error : std::exception {
@@ -257,7 +257,8 @@ struct basic_context {
       }
       if (*failbit) {
         *failbit = false;
-        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(*result));
+        std::rethrow_exception(
+            detail::unsafe_cast<std::exception_ptr>(*result));
       }
       return detail::unsafe_cast<T>(*result);
     }
@@ -272,7 +273,8 @@ struct basic_context {
       }
       if (*failbit) {
         *failbit = false;
-        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(*result));
+        std::rethrow_exception(
+            detail::unsafe_cast<std::exception_ptr>(*result));
       }
     }
   };
@@ -367,8 +369,7 @@ struct generator {
    private:
     detail::unsafe_any _result;
   };
-  struct _generator
-      : detail::basic_generator<RetType(context&), context> {
+  struct _generator : detail::basic_generator<RetType(context&), context> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -393,12 +394,14 @@ struct generator {
         } else if (this->ctx._status == Cancelled) {
           throw cancel_error();
         }
-        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       } else if (this->ctx._status == Returned) {
         return result_t<RetType, YieldType>::generate_ret(
             detail::unsafe_cast<RetType>(this->ctx._result));
       } else if (this->ctx._status == Throwed) {
-        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }
@@ -528,11 +531,13 @@ struct generator<void, YieldType> {
         } else if (this->ctx._status == Cancelled) {
           throw cancel_error();
         }
-        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       } else if (this->ctx._status == Returned) {
         return result_t<void, YieldType>::generate_ret();
       } else if (this->ctx._status == Throwed) {
-        std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+        std::rethrow_exception(
+            detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
       }
       throw std::bad_function_call();
     }
@@ -655,9 +660,8 @@ struct async_generator {
     detail::unsafe_any _result;
     bool _failbit;
   };
-  struct _generator
-      : detail::basic_generator<RetType(context&), context>,
-        std::enable_shared_from_this<_generator> {
+  struct _generator : detail::basic_generator<RetType(context&), context>,
+                      std::enable_shared_from_this<_generator> {
     explicit _generator(const _generator& v) = delete;
     ~_generator() {
       if (this->ctx._status == Yielded) {
@@ -676,7 +680,9 @@ struct async_generator {
         if (this->ctx._status == Awaiting) {
           std::weak_ptr<_generator> ref = this->shared_from_this();
           promise<result_t<RetType, YieldType>> pm;
-          promise<detail::unsafe_any> tmp = detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+          promise<detail::unsafe_any> tmp =
+              detail::unsafe_cast<promise<detail::unsafe_any>>(
+                  this->ctx._result);
           tmp.then([ref, pm](const detail::unsafe_any& res) {
                if (std::shared_ptr<_generator> tmp = ref.lock()) {
                  tmp->ctx._result = res;
@@ -871,7 +877,9 @@ struct async_generator<void, YieldType> {
         if (this->ctx._status == Awaiting) {
           std::weak_ptr<_generator> ref = this->shared_from_this();
           promise<result_t<void, YieldType>> pm;
-          promise<detail::unsafe_any> tmp = detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+          promise<detail::unsafe_any> tmp =
+              detail::unsafe_cast<promise<detail::unsafe_any>>(
+                  this->ctx._result);
           tmp.then([ref, pm](const detail::unsafe_any& res) {
                if (std::shared_ptr<_generator> tmp = ref.lock()) {
                  tmp->ctx._result = res;

@@ -1,7 +1,7 @@
 #include <iostream>
 
-#include "awacorn/async.hpp"
-#include "awacorn/event.hpp"
+#include "async.hpp"
+#include "event.hpp"
 
 awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
                                           const std::string& str) {
