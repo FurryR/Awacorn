@@ -30,7 +30,7 @@ struct basic_promise {
   // sub-implementation
   template <typename Ret, typename ArgType,
             template <typename T> class PromiseT, typename _promise>
-  struct __then_sub_impl {
+  struct _then_sub_impl {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -52,7 +52,7 @@ struct basic_promise {
   // pm.then(detail::function<Promise<void>(ArgType)>) sub-implementation
   template <typename ArgType, template <typename T> class PromiseT,
             typename _promise>
-  struct __then_sub_impl<void, ArgType, PromiseT, _promise> {
+  struct _then_sub_impl<void, ArgType, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm,
                                 const U&& fn) {
@@ -76,7 +76,7 @@ struct basic_promise {
   // pm.then(detail::function<Promise<Ret>()>) sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __then_sub_impl<Ret, void, PromiseT, _promise> {
+  struct _then_sub_impl<Ret, void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -97,7 +97,7 @@ struct basic_promise {
   };
   // pm.then(detail::function<Promise<void>()>) sub-implementation
   template <template <typename T> class PromiseT, typename _promise>
-  struct __then_sub_impl<void, void, PromiseT, _promise> {
+  struct _then_sub_impl<void, void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -121,7 +121,7 @@ struct basic_promise {
   // pm.then(detail::function<Ret(ArgType)>) implementation
   template <typename Ret, typename ArgType,
             template <typename T> class PromiseT, typename _promise>
-  struct __then_impl {
+  struct _then_impl {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -140,18 +140,18 @@ struct basic_promise {
   // pm.then(detail::function<Promise<Ret>(ArgType)>) implementation
   template <typename Ret, typename ArgType,
             template <typename T> class PromiseT, typename _promise>
-  struct __then_impl<PromiseT<Ret>, ArgType, PromiseT, _promise> {
+  struct _then_impl<PromiseT<Ret>, ArgType, PromiseT, _promise> {
     template <typename U>
     static inline PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm,
                                       U&& fn) {
-      return __then_sub_impl<Ret, ArgType, PromiseT, _promise>::apply(
+      return _then_sub_impl<Ret, ArgType, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
   // pm.then(detail::function<void(ArgType)>) implementation
   template <typename ArgType, template <typename T> class PromiseT,
             typename _promise>
-  struct __then_impl<void, ArgType, PromiseT, _promise> {
+  struct _then_impl<void, ArgType, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -173,7 +173,7 @@ struct basic_promise {
   // pm.then(detail::function<Ret()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __then_impl<Ret, void, PromiseT, _promise> {
+  struct _then_impl<Ret, void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -192,17 +192,17 @@ struct basic_promise {
   // pm.then(detail::function<Promise<Ret>()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __then_impl<PromiseT<Ret>, void, PromiseT, _promise> {
+  struct _then_impl<PromiseT<Ret>, void, PromiseT, _promise> {
     template <typename U>
     static inline PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm,
                                       U&& fn) {
-      return __then_sub_impl<Ret, void, PromiseT, _promise>::apply(
+      return _then_sub_impl<Ret, void, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
   // pm.then(detail::function<void()>) implementation
   template <template <typename T> class PromiseT, typename _promise>
-  struct __then_impl<void, void, PromiseT, _promise> {
+  struct _then_impl<void, void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -227,7 +227,7 @@ struct basic_promise {
   // sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __error_sub_impl {
+  struct _error_sub_impl {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -248,7 +248,7 @@ struct basic_promise {
   // pm.error(detail::function<Promise<void>(std::exception_ptr)>)
   // sub-implementation
   template <template <typename T> class PromiseT, typename _promise>
-  struct __error_sub_impl<void, PromiseT, _promise> {
+  struct _error_sub_impl<void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -271,7 +271,7 @@ struct basic_promise {
   // pm.error(detail::function<Ret(std::exception_ptr)>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __error_impl {
+  struct _error_impl {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -289,17 +289,17 @@ struct basic_promise {
   // pm.error(detail::function<Promise<Ret>(std::exception_ptr)>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __error_impl<PromiseT<Ret>, PromiseT, _promise> {
+  struct _error_impl<PromiseT<Ret>, PromiseT, _promise> {
     template <typename U>
     static inline PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm,
                                       U&& fn) {
-      return __error_sub_impl<Ret, PromiseT, _promise>::apply(
+      return _error_sub_impl<Ret, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
   // pm.error(detail::function<void(std::exception_ptr)>) implementation
   template <template <typename T> class PromiseT, typename _promise>
-  struct __error_impl<void, PromiseT, _promise> {
+  struct _error_impl<void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -321,7 +321,7 @@ struct basic_promise {
   // pm.finally(detail::function<Promise<Ret>()>) sub-implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __finally_sub_impl {
+  struct _finally_sub_impl {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -341,7 +341,7 @@ struct basic_promise {
   };
   // pm.finally(detail::function<Promise<void>()>) sub-implementation
   template <template <typename T> class PromiseT, typename _promise>
-  struct __finally_sub_impl<void, PromiseT, _promise> {
+  struct _finally_sub_impl<void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -364,7 +364,7 @@ struct basic_promise {
   // pm.finally(detail::function<Ret()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __finally_impl {
+  struct _finally_impl {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
@@ -382,17 +382,17 @@ struct basic_promise {
   // pm.finally(detail::function<Promise<Ret>()>) implementation
   template <typename Ret, template <typename T> class PromiseT,
             typename _promise>
-  struct __finally_impl<PromiseT<Ret>, PromiseT, _promise> {
+  struct _finally_impl<PromiseT<Ret>, PromiseT, _promise> {
     template <typename U>
     static inline PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm,
                                       U&& fn) {
-      return __finally_sub_impl<Ret, PromiseT, _promise>::apply(
+      return _finally_sub_impl<Ret, PromiseT, _promise>::apply(
           pm, std::forward<U>(fn));
     }
   };
   // pm.finally(detail::function<void()>) implementation
   template <template <typename T> class PromiseT, typename _promise>
-  struct __finally_impl<void, PromiseT, _promise> {
+  struct _finally_impl<void, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
@@ -552,7 +552,7 @@ struct promise : detail::basic_promise {
   inline auto then(U&& fn) const -> promise<typename detail::remove_promise<
       decltype(fn(std::declval<value_type>())), promise>::type> {
     using Ret = decltype(fn(std::declval<value_type>()));
-    return __then_impl<Ret, value_type, promise, _promise>::apply(
+    return _then_impl<Ret, value_type, promise, _promise>::apply(
         pm, std::forward<U>(fn));
   }
   /**
@@ -570,7 +570,7 @@ struct promise : detail::basic_promise {
   inline auto error(U&& fn) const -> promise<typename detail::remove_promise<
       decltype(fn(std::declval<std::exception_ptr>())), promise>::type> {
     using Ret = decltype(fn(std::declval<std::exception_ptr>()));
-    return __error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
+    return _error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
   }
   /**
    * @brief 设定在 promise
@@ -588,7 +588,7 @@ struct promise : detail::basic_promise {
   inline auto finally(U&& fn) const -> promise<
       typename detail::remove_promise<decltype(fn()), promise>::type> {
     using Ret = decltype(fn());
-    return __finally_impl<Ret, promise, _promise>::apply(pm,
+    return _finally_impl<Ret, promise, _promise>::apply(pm,
                                                          std::forward<U>(fn));
   }
   /**
@@ -727,7 +727,7 @@ class promise<void> : detail::basic_promise {
   inline auto then(U&& fn) const -> promise<
       typename detail::remove_promise<decltype(fn()), promise>::type> {
     using Ret = decltype(fn());
-    return __then_impl<Ret, void, promise, _promise>::apply(
+    return _then_impl<Ret, void, promise, _promise>::apply(
         pm, std::forward<U>(fn));
   }
   /**
@@ -745,7 +745,7 @@ class promise<void> : detail::basic_promise {
   inline auto error(U&& fn) const -> promise<typename detail::remove_promise<
       decltype(fn(std::declval<std::exception_ptr>())), promise>::type> {
     using Ret = decltype(fn(std::declval<std::exception_ptr>()));
-    return __error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
+    return _error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
   }
   /**
    * @brief 设定在 promise
@@ -763,7 +763,7 @@ class promise<void> : detail::basic_promise {
   inline auto finally(U&& fn) const -> promise<
       typename detail::remove_promise<decltype(fn()), promise>::type> {
     using Ret = decltype(fn());
-    return __finally_impl<Ret, promise, _promise>::apply(pm,
+    return _finally_impl<Ret, promise, _promise>::apply(pm,
                                                          std::forward<U>(fn));
   }
   /**

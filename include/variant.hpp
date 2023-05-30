@@ -18,20 +18,20 @@ struct contains<T, T2, Args...> : contains<T, Args...> {};
 template <typename T, typename... Args>
 struct contains<T, T, Args...> : std::integral_constant<bool, true> {};
 template <typename W, typename... Ts>
-struct __make_unique_impl {
+struct _make_unique_impl {
   using type = W;
 };
 template <template <typename...> class W, typename... Current, typename T,
           typename... Ts>
-struct __make_unique_impl<W<Current...>, T, Ts...>
+struct _make_unique_impl<W<Current...>, T, Ts...>
     : std::conditional<
           contains<T, Ts...>::value,
-          typename __make_unique_impl<W<Current...>, Ts...>::type,
-          typename __make_unique_impl<W<Current..., T>, Ts...>::type> {};
+          typename _make_unique_impl<W<Current...>, Ts...>::type,
+          typename _make_unique_impl<W<Current..., T>, Ts...>::type> {};
 template <typename W>
 struct make_unique;
 template <template <typename...> class W, typename... T>
-struct make_unique<W<T...>> : __make_unique_impl<W<>, T...> {};
+struct make_unique<W<T...>> : _make_unique_impl<W<>, T...> {};
 using unique_test =
     typename make_unique<std::variant<int, std::monostate, int>>::type;
 }  // namespace traits
@@ -96,15 +96,15 @@ constexpr bool holds_alternative(const std::variant<Args...>& v) {
 #else
 namespace detail {
 template <size_t cur, typename TargetT, typename... Args>
-struct __idx_helper : std::integral_constant<size_t, (size_t)-1> {};
+struct _idx_helper : std::integral_constant<size_t, (size_t)-1> {};
 template <size_t cur, typename TargetT, typename ResultT, typename... Args>
-struct __idx_helper<cur, TargetT, ResultT, Args...>
-    : __idx_helper<cur + 1, TargetT, Args...> {};
+struct _idx_helper<cur, TargetT, ResultT, Args...>
+    : _idx_helper<cur + 1, TargetT, Args...> {};
 template <size_t cur, typename TargetT, typename... Args>
-struct __idx_helper<cur, TargetT, TargetT, Args...>
+struct _idx_helper<cur, TargetT, TargetT, Args...>
     : std::integral_constant<size_t, cur> {};
 template <typename TargetT, typename... Args>
-struct type_index : __idx_helper<0, TargetT, Args...> {};
+struct type_index : _idx_helper<0, TargetT, Args...> {};
 template <size_t idx, typename... Args>
 struct index_type;
 template <size_t idx, typename T, typename... Args>
