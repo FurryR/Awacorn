@@ -10,7 +10,6 @@
 
 namespace awacorn {
 namespace detail {
-namespace traits {
 template <typename T, typename... Args>
 struct contains : std::integral_constant<bool, false> {};
 template <typename T, typename T2, typename... Args>
@@ -32,9 +31,6 @@ template <typename W>
 struct make_unique;
 template <template <typename...> class W, typename... T>
 struct make_unique<W<T...>> : _make_unique_impl<W<>, T...> {};
-using unique_test =
-    typename make_unique<std::variant<int, std::monostate, int>>::type;
-}  // namespace traits
 }  // namespace detail
 }  // namespace awacorn
 #if __cplusplus >= 201703L
@@ -47,8 +43,15 @@ using unique_test =
 #endif
 namespace awacorn {
 #if __cplusplus >= 201703L
+using variant = std::variant;
+/**
+ * @brief 去重 variant。
+ *
+ * @tparam Args 类型参数。
+ */
 template <typename... Args>
-using variant = std::variant<Args...>;
+using unique_variant =
+    typename detail::make_unique<std::variant<Args...>>::type;
 using bad_variant_caccess = std::bad_variant_access;
 using monostate = std::monostate;
 template <size_t I, typename... Args>
@@ -113,6 +116,7 @@ template <typename T, typename... Args>
 struct index_type<0, T, Args...> {
   using type = T;
 };
+
 };  // namespace detail
 struct bad_variant_access : std::exception {
   virtual const char* what() const noexcept { return "bad variant access"; }
@@ -200,6 +204,13 @@ struct variant {
   std::unique_ptr<void, void (*)(void*)> _ptr;
   void* (*_clone)(void*);
 };
+/**
+ * @brief 去重 variant。
+ *
+ * @tparam Args 类型参数。
+ */
+template <typename... Args>
+using unique_variant = typename detail::make_unique<variant<Args...>>::type;
 template <size_t idx, typename... Args>
 typename detail::index_type<idx, Args...>::type* get_if(
     variant<Args...>& v) noexcept {
