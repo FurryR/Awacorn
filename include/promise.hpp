@@ -789,12 +789,12 @@ class promise<void> : detail::basic_promise {
   explicit promise() : pm(new _promise()) {}
 };
 namespace detail {
-template <typename ResultType, size_t N>
+template <typename ResultType, std::size_t N>
 struct promise_all {
   template <typename T, typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
-                           const std::shared_ptr<size_t>& done_count,
+                           const std::shared_ptr<std::size_t>& done_count,
                            const promise<T>& current, Args&&... args) {
     promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                           std::forward<Args>(args)...);
@@ -811,7 +811,7 @@ struct promise_all {
   template <typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
-                           const std::shared_ptr<size_t>& done_count,
+                           const std::shared_ptr<std::size_t>& done_count,
                            const promise<void>& current, Args&&... args) {
     promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                           std::forward<Args>(args)...);
@@ -827,15 +827,15 @@ struct promise_all {
   }
   static inline void apply(const promise<ResultType>&,
                            const std::shared_ptr<ResultType>&,
-                           const std::shared_ptr<size_t>&) {}
+                           const std::shared_ptr<std::size_t>&) {}
 };
-template <size_t TOTAL, size_t N>
+template <std::size_t TOTAL, std::size_t N>
 struct promise_any {
   template <typename T, typename ResultType, typename... Args>
   static inline void apply(
       const promise<ResultType>& pm,
       const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>& exce,
-      const std::shared_ptr<size_t>& fail_count, const promise<T>& current,
+      const std::shared_ptr<std::size_t>& fail_count, const promise<T>& current,
       Args&&... args) {
     promise_any<TOTAL, N - 1>::apply(pm, exce, fail_count,
                                      std::forward<Args>(args)...);
@@ -851,8 +851,8 @@ struct promise_any {
   static inline void apply(
       const promise<ResultType>& pm,
       const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>& exce,
-      const std::shared_ptr<size_t>& fail_count, const promise<void>& current,
-      Args&&... args) {
+      const std::shared_ptr<std::size_t>& fail_count,
+      const promise<void>& current, Args&&... args) {
     promise_any<TOTAL, N - 1>::apply(pm, exce, fail_count,
                                      std::forward<Args>(args)...);
     current.then([pm]() { pm.resolve(ResultType(monostate())); });
@@ -867,7 +867,7 @@ struct promise_any {
   static void apply(
       const promise<ResultType>&,
       const std::shared_ptr<std::array<std::exception_ptr, TOTAL>>&,
-      const std::shared_ptr<size_t>&) {}
+      const std::shared_ptr<std::size_t>&) {}
 };
 struct promise_race {
   template <typename ResultType, typename T, typename... Args>
@@ -887,12 +887,12 @@ struct promise_race {
   template <typename ResultType>
   static void apply(const promise<ResultType>&) {}
 };
-template <typename ResultType, size_t N>
+template <typename ResultType, std::size_t N>
 struct promise_all_settled {
   template <typename T, typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const std::shared_ptr<ResultType>& result,
-                           const std::shared_ptr<size_t>& done_count,
+                           const std::shared_ptr<std::size_t>& done_count,
                            const promise<T>& current, Args&&... args) {
     promise_all_settled<ResultType, N - 1>::apply(pm, result, done_count,
                                                   std::forward<Args>(args)...);
@@ -907,7 +907,7 @@ struct promise_all_settled {
   }
   static inline void apply(const promise<ResultType>&,
                            const std::shared_ptr<ResultType>&,
-                           const std::shared_ptr<size_t>&) {}
+                           const std::shared_ptr<std::size_t>&) {}
 };
 };  // namespace detail
 namespace gather {
@@ -927,7 +927,7 @@ all(const promise<Args>&... args) {
       std::tuple<typename detail::replace_void<Args, monostate>::type...>;
   promise<ResultType> pm;
   std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
-  std::shared_ptr<size_t> done_count = std::make_shared<size_t>(0);
+  std::shared_ptr<std::size_t> done_count = std::make_shared<std::size_t>(0);
   detail::promise_all<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;
@@ -948,7 +948,7 @@ any(const promise<Args>&... args) {
   promise<awacorn::unique_variant<
       typename detail::replace_void<Args, monostate>::type...>>
       pm;
-  std::shared_ptr<size_t> fail_count = std::make_shared<size_t>(0);
+  std::shared_ptr<std::size_t> fail_count = std::make_shared<std::size_t>(0);
   std::shared_ptr<std::array<std::exception_ptr, sizeof...(Args)>> exce =
       std::make_shared<std::array<std::exception_ptr, sizeof...(Args)>>();
   detail::promise_any<sizeof...(Args), sizeof...(Args) - 1>::apply(
@@ -991,7 +991,7 @@ static inline promise<std::tuple<promise<Args>...>> all_settled(
   using ResultType = std::tuple<promise<Args>...>;
   promise<ResultType> pm;
   std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
-  std::shared_ptr<size_t> done_count = std::make_shared<size_t>(0);
+  std::shared_ptr<std::size_t> done_count = std::make_shared<std::size_t>(0);
   detail::promise_all_settled<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;

@@ -16,6 +16,7 @@
     - [`race`](#race)
     - [`all_settled`](#all_settled)
   - [`awacorn::variant`](#awacornvariant)
+  - [`awacorn::unique_variant`](#awacornunique_variant)
 
 ---
 
@@ -140,14 +141,14 @@ int main() {
 
 请参照 [Promise.any](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/any)。
 
-- :warning: 在 C++ 11 下返回值是 `promise<awacorn::variant<...>>`。
-- :warning: 在全部 `Promise` 都被拒绝的情况下会直接用 `std::array` 来拒绝 `Promise` (长度为总共的 `promise` 数量)，而不是使用 `AggregateError`。
+- :warning: 在 C++ 11 下返回值是 `promise<awacorn::unique_variant<...>>`。
+- :warning: 在全部 `Promise` 都被拒绝的情况下会直接用 `std::array<std::exception_ptr, COUNT>` 来拒绝 `Promise` (长度为总共的 `promise` 数量)，而不是使用 `AggregateError`。
 
 ### `race`
 
 请参照 [Promise.race](https://developer.mozilla.org/docs/web/javascript/reference/global_objects/promise/race)。
 
-- :warning: 在 C++ 11 下返回值是 `promise<awacorn::variant<...>>`。
+- :warning: 在 C++ 11 下返回值是 `promise<awacorn::unique_variant<...>>`。
 
 ### `all_settled`
 
@@ -163,3 +164,11 @@ int main() {
 实现了一小部分的 `std::variant` 接口，请尽情使用。
 
 :warning: 注意: 在 C++ 11 上请确保使用 **awacorn::variant** 而不是其它的 variant 实现，因为使用其它的 variant 容器可能导致跟 Awacorn 不兼容。如果实在是要使用指定实现，请**更改 Awacorn 源代码**。
+
+## `awacorn::unique_variant`
+
+用于去除 `variant` 类型中重复的模板参数类型来防止访问参数时谬构。
+
+```cpp
+using test = awacorn::unique_variant<int, int>; // awacorn::variant<int>
+```

@@ -9,44 +9,46 @@
 namespace awacorn {
 namespace detail {
 struct unsafe_any {
-  unsafe_any()
-      : _ptr(nullptr, [](void*) {}),
-        _clone([](void*) -> void* { return nullptr; }) {}
+  unsafe_any() : _ptr(nullptr) {}
   template <typename T>
   unsafe_any(T&& v)
-      : _ptr(new typename std::decay<T>::type(std::forward<T>(v)),
-             [](void* ptr) { delete (typename std::decay<T>::type*)ptr; }),
-        _clone([](void* ptr) {
-          return (void*)new typename std::decay<T>::type(
-              *((typename std::decay<T>::type*)ptr));
-        }) {}
-  unsafe_any(const unsafe_any& v)
-      : _ptr(v._clone(v._ptr.get()), v._ptr.get_deleter()), _clone(v._clone) {}
-  unsafe_any(unsafe_any&& v) : _ptr(std::move(v._ptr)), _clone(v._clone) {
-    v._clone = [](void*) -> void* { return nullptr; };
-  }
+      : _ptr(new _derived<typename std::decay<T>::type>(std::forward<T>(v))) {}
+  unsafe_any(const unsafe_any& v) : _ptr(v._ptr ? v._ptr->clone() : nullptr) {}
+  unsafe_any(unsafe_any&& v) : _ptr(std::move(v._ptr)) {}
   unsafe_any& operator=(const unsafe_any& v) {
-    _ptr = std::unique_ptr<void, void (*)(void*)>(v._clone(v._ptr.get()),
-                                                  v._ptr.get_deleter());
-    _clone = v._clone;
+    _ptr = v._ptr ? v._ptr->clone() : nullptr;
     return *this;
   }
   unsafe_any& operator=(unsafe_any&& v) {
     _ptr = std::move(v._ptr);
-    _clone = v._clone;
-    v._clone = [](void*) -> void* { return nullptr; };
     return *this;
   }
   template <typename T>
   friend T unsafe_cast(const unsafe_any& v) noexcept;
 
  private:
-  std::unique_ptr<void, void (*)(void*)> _ptr;
-  void* (*_clone)(void*);
+  struct _base {
+    virtual void* get() noexcept = 0;
+    virtual std::unique_ptr<_base> clone() const = 0;
+    virtual ~_base() {}
+  };
+  template <typename T>
+  struct _derived : _base {
+    void* get() noexcept override { return &data; }
+    std::unique_ptr<_base> clone() const override {
+      return std::unique_ptr<_base>(new _derived(data));
+    }
+    _derived(T&& v) : data(std::move(v)){};
+    _derived(const T& v) : data(v){};
+
+   private:
+    T data;
+  };
+  std::unique_ptr<_base> _ptr;
 };
 template <typename T>
 T unsafe_cast(const unsafe_any& v) noexcept {
-  return *static_cast<T*>(v._ptr.get());
+  return *((T*)v._ptr->get());
 }
 };  // namespace detail
 };  // namespace awacorn

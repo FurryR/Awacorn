@@ -14,7 +14,7 @@ awacorn::promise<void> test(awacorn::event_loop* ev) {
 }
 int main() {
   awacorn::event_loop ev;
-  for (size_t i = 0; i < 1000; i++) {
+  for (std::size_t i = 0; i < 1000; i++) {
     test(&ev);
   }
   std::chrono::high_resolution_clock::time_point tm =

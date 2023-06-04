@@ -89,7 +89,7 @@ struct context {
 
  private:
 #if defined(AWACORN_USE_BOOST)
-  context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+  context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
       : _status(detail::async_state_t::Pending),
         _failbit(false),
         _ctx(boost::context::callcc(
@@ -103,7 +103,7 @@ struct context {
               return std::move(_ctx);
             })) {}
 #elif defined(AWACORN_USE_UCONTEXT)
-  context(void (*fn)(void*), void* arg, size_t stack_size = 0)
+  context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
       : _status(detail::async_state_t::Pending), _stack(nullptr, [](char* ptr) {
           if (ptr) delete[] ptr;
         }) {
@@ -153,7 +153,7 @@ struct basic_async_fn {
   function<Fn> fn;
   template <typename U>
   basic_async_fn(U&& fn, void (*run_fn)(void*), void* args,
-                 size_t stack_size = 0)
+                 std::size_t stack_size = 0)
       : ctx(run_fn, args, stack_size), fn(std::forward<U>(fn)) {}
   basic_async_fn(const basic_async_fn& v) = delete;
 };
@@ -208,7 +208,7 @@ struct async_fn : basic_async_fn<RetType(context&)>,
     return this->next();
   }
   template <typename U>
-  explicit async_fn(U&& fn, size_t stack_size = 0)
+  explicit async_fn(U&& fn, std::size_t stack_size = 0)
       : basic_async_fn<RetType(context&)>(
             std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
   static void run_fn(async_fn* self) {
@@ -273,7 +273,7 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
     return this->next();
   }
   template <typename U>
-  explicit async_fn(U&& fn, size_t stack_size = 0)
+  explicit async_fn(U&& fn, std::size_t stack_size = 0)
       : basic_async_fn<void(context&)>(
             std::forward<U>(fn), (void (*)(void*))run_fn, this, stack_size) {}
   static void run_fn(async_fn* self) {
@@ -298,7 +298,7 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
  * promise 对象。
  */
 template <typename U>
-auto async(U&& fn, size_t stack_size = 0)
+auto async(U&& fn, std::size_t stack_size = 0)
     -> promise<decltype(fn(std::declval<context&>()))> {
   return detail::async_fn<decltype(fn(std::declval<context&>()))>::create(
              std::forward<U>(fn), stack_size)
