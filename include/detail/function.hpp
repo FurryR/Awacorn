@@ -15,9 +15,6 @@ template <typename Ret, typename... Args>
 class function<Ret(Args...)> {
   struct _m_base {
     virtual Ret operator()(Args...) = 0;
-    virtual const std::type_info& target_type() const noexcept = 0;
-    virtual void* target(const std::type_info&) noexcept = 0;
-    virtual const void* target(const std::type_info&) const noexcept = 0;
     virtual ~_m_base() = default;
   };
   template <typename T>
@@ -27,15 +24,6 @@ class function<Ret(Args...)> {
 
     _m_derived(const value_type& fn) : fn(fn) {}
     _m_derived(value_type&& fn) : fn(std::move(fn)) {}
-    const std::type_info& target_type() const noexcept override {
-      return typeid(value_type);
-    }
-    void* target(const std::type_info& info) noexcept override {
-      return info == typeid(value_type) ? &fn : nullptr;
-    }
-    const void* target(const std::type_info& info) const noexcept override {
-      return info == typeid(value_type) ? &fn : nullptr;
-    }
     Ret operator()(Args... args) override {
       return fn(std::forward<Args>(args)...);
     }
@@ -76,29 +64,6 @@ class function<Ret(Args...)> {
    * @return false 函数未被初始化
    */
   inline operator bool() const noexcept { return !!ptr; }
-  /**
-   * @brief 获得目标类型的运行时类型信息 (RTTI)。
-   * @warning 如果函数未被初始化则返回 typeid(void)。
-   *
-   * @return const std::type_info& 运行时类型信息
-   */
-  inline const std::type_info& target_type() const noexcept {
-    return *this ? ptr->target_type() : typeid(void);
-  }
-  /**
-   * @brief 获得目标类型的指针。如果类型不匹配，返回 nullptr。
-   *
-   * @tparam T 目标类型。
-   * @return T* 目标类型的指针。
-   */
-  template <typename T>
-  inline T* target() noexcept {
-    return *this ? (T*)ptr->target(typeid(T)) : nullptr;
-  }
-  template <typename T>
-  inline const T* target() const noexcept {
-    return *this ? (T*)ptr->target(typeid(T)) : nullptr;
-  }
   /**
    * @brief 调用函数。
    *

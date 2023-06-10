@@ -519,6 +519,15 @@ struct promise : detail::basic_promise {
         reset();
       }
     }
+    void reject(std::exception_ptr&& err) {
+      if (_status == Pending) {
+        _status = Rejected;
+        _val = variant<value_type, std::exception_ptr>(std::move(err));
+        if (_error) _error(get<std::exception_ptr>(_val));
+        if (_finally) _finally();
+        reset();
+      }
+    }
     constexpr state_t status() const noexcept { return _status; }
     _promise() : _status(Pending) {}
     _promise(const _promise& val) = delete;
@@ -608,6 +617,9 @@ struct promise : detail::basic_promise {
   inline void reject(const std::exception_ptr& value) const {
     pm->reject(value);
   }
+  inline void reject(std::exception_ptr&& value) const {
+    pm->reject(std::move(value));
+  }
   /**
    * @brief 获得Promise的状态。
    *
@@ -615,6 +627,16 @@ struct promise : detail::basic_promise {
    */
   inline state_t status() const noexcept { return pm->status(); }
   explicit promise() : pm(new _promise()) {}
+  promise(const promise& v) : pm(v.pm) {}
+  promise(promise&& v) : pm(std::move(v.pm)) {}
+  promise& operator=(const promise& v) {
+    pm = v.pm;
+    return *this;
+  }
+  promise& operator=(promise&& v) noexcept {
+    pm = std::move(v.pm);
+    return *this;
+  }
 };
 /**
  * @brief 没有值的 promise 对象。
@@ -687,6 +709,15 @@ class promise<void> : detail::basic_promise {
       if (_status == Pending) {
         _status = Rejected;
         _val = err;
+        if (_error) _error(_val);
+        if (_finally) _finally();
+        reset();
+      }
+    }
+    void reject(std::exception_ptr&& err) {
+      if (_status == Pending) {
+        _status = Rejected;
+        _val = std::move(err);
         if (_error) _error(_val);
         if (_finally) _finally();
         reset();
@@ -780,6 +811,9 @@ class promise<void> : detail::basic_promise {
   inline void reject(const std::exception_ptr& value) const {
     pm->reject(value);
   }
+  inline void reject(std::exception_ptr&& value) const {
+    pm->reject(std::move(value));
+  }
   /**
    * @brief 获得Promise的状态。
    *
@@ -787,6 +821,16 @@ class promise<void> : detail::basic_promise {
    */
   inline state_t status() const noexcept { return pm->status(); }
   explicit promise() : pm(new _promise()) {}
+  promise(const promise& v) : pm(v.pm) {}
+  promise(promise&& v) : pm(std::move(v.pm)) {}
+  promise& operator=(const promise& v) {
+    pm = v.pm;
+    return *this;
+  }
+  promise& operator=(promise&& v) noexcept {
+    pm = std::move(v.pm);
+    return *this;
+  }
 };
 namespace detail {
 template <typename ResultType, std::size_t N>
@@ -1040,6 +1084,12 @@ template <typename Value>
 inline promise<Value> reject(const std::exception_ptr& err) {
   promise<Value> tmp;
   tmp.reject(err);
+  return tmp;
+}
+template <typename Value>
+inline promise<Value> reject(std::exception_ptr&& err) {
+  promise<Value> tmp;
+  tmp.reject(std::move(err));
   return tmp;
 }
 };  // namespace awacorn

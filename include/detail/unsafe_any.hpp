@@ -8,8 +8,17 @@
 #include <memory>
 namespace awacorn {
 namespace detail {
+/**
+ * @brief 不进行类型检查的 any 容器。
+ */
 struct unsafe_any {
-  unsafe_any() : _ptr(nullptr) {}
+  unsafe_any() = default;
+  /**
+   * @brief 构造 any 对象。
+   *
+   * @tparam T 原对象的类型。
+   * @param v 原对象。对象必须至少允许移动构造。
+   */
   template <typename T>
   unsafe_any(T&& v)
       : _ptr(new _derived<typename std::decay<T>::type>(std::forward<T>(v))) {}
@@ -24,7 +33,9 @@ struct unsafe_any {
     return *this;
   }
   template <typename T>
-  friend T unsafe_cast(const unsafe_any& v) noexcept;
+  friend constexpr const T& unsafe_cast(const unsafe_any& v) noexcept;
+  template <typename T>
+  friend constexpr T&& unsafe_cast(unsafe_any&& v) noexcept;
 
  private:
   struct _base {
@@ -46,9 +57,20 @@ struct unsafe_any {
   };
   std::unique_ptr<_base> _ptr;
 };
+/**
+ * @brief 类型不安全的 any 对象转换。
+ *
+ * @tparam T 原对象的类型。
+ * @param v any 对象。
+ * @return constexpr const T& 原对象的引用。
+ */
 template <typename T>
-T unsafe_cast(const unsafe_any& v) noexcept {
+constexpr const T& unsafe_cast(const unsafe_any& v) noexcept {
   return *((T*)v._ptr->get());
+}
+template <typename T>
+constexpr T&& unsafe_cast(unsafe_any&& v) noexcept {
+  return std::move(*((T*)v._ptr->get()));
 }
 };  // namespace detail
 };  // namespace awacorn

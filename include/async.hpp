@@ -63,7 +63,7 @@ struct context {
    * @return T promise 的结果。
    */
   template <typename T>
-  T operator>>(const promise<T>& value) {
+  T&& operator>>(const promise<T>& value) {
     if (_status != detail::async_state_t::Active)
       throw std::bad_function_call();
     _status = detail::async_state_t::Awaiting;
@@ -73,7 +73,7 @@ struct context {
       _failbit = false;
       std::rethrow_exception(detail::unsafe_cast<std::exception_ptr>(_result));
     }
-    return detail::unsafe_cast<T>(_result);
+    return detail::unsafe_cast<T>(std::move(_result));
   }
   void operator>>(const promise<void>& value) {
     if (_status != detail::async_state_t::Active)
@@ -169,7 +169,8 @@ struct async_fn : basic_async_fn<RetType(context&)>,
         std::shared_ptr<async_fn> ref = this->shared_from_this();
         promise<RetType> pm;
         promise<detail::unsafe_any> tmp =
-            detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+            std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
+                std::move(this->ctx._result)));
         tmp.then([ref, pm](const detail::unsafe_any& res) {
              ref->ctx._result = res;
              ref->_await_next()
@@ -187,15 +188,17 @@ struct async_fn : basic_async_fn<RetType(context&)>,
             });
         return pm;
       } else if (this->ctx._status == async_state_t::Returned) {
-        return resolve(detail::unsafe_cast<RetType>(this->ctx._result));
+        return resolve(std::move(
+            detail::unsafe_cast<RetType>(std::move(this->ctx._result))));
       }
-      return reject<RetType>(
-          detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+      return reject<RetType>(std::move(detail::unsafe_cast<std::exception_ptr>(
+          std::move(this->ctx._result))));
     } else if (this->ctx._status == async_state_t::Returned) {
-      return resolve(detail::unsafe_cast<RetType>(this->ctx._result));
+      return resolve(std::move(
+          detail::unsafe_cast<RetType>(std::move(this->ctx._result))));
     }
-    return reject<RetType>(
-        detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+    return reject<RetType>(std::move(
+        detail::unsafe_cast<std::exception_ptr>(std::move(this->ctx._result))));
   }
   template <typename... Args>
   static inline std::shared_ptr<async_fn> create(Args&&... args) {
@@ -234,7 +237,8 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
         std::shared_ptr<async_fn> ref = this->shared_from_this();
         promise<void> pm;
         promise<detail::unsafe_any> tmp =
-            detail::unsafe_cast<promise<detail::unsafe_any>>(this->ctx._result);
+            std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
+                std::move(this->ctx._result)));
         tmp.then([ref, pm](const detail::unsafe_any& res) {
              ref->ctx._result = res;
              ref->_await_next()
@@ -254,13 +258,13 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
       } else if (this->ctx._status == async_state_t::Returned) {
         return resolve();
       }
-      return reject<void>(
-          detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+      return reject<void>(std::move(detail::unsafe_cast<std::exception_ptr>(
+          std::move(this->ctx._result))));
     } else if (this->ctx._status == async_state_t::Returned) {
       return resolve();
     }
-    return reject<void>(
-        detail::unsafe_cast<std::exception_ptr>(this->ctx._result));
+    return reject<void>(std::move(
+        detail::unsafe_cast<std::exception_ptr>(std::move(this->ctx._result))));
   }
   template <typename... Args>
   static inline std::shared_ptr<async_fn> create(Args&&... args) {

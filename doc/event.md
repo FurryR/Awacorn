@@ -98,11 +98,34 @@ int main() {
 
 在加入 `set_yield` 函数以后，I/O 实现可以通过替换 **yield 实现** 来实现事件循环空闲时进行 I/O 操作，使其变得更加精确且不影响事件循环运行。
 
-**yield 实现** 将接受一个 `const std::chrono::steady_clock::duration&` 作为 **参考** 的睡眠时间，这意味着函数并不需要睡眠那么久，或者可以睡眠更久(这可能会影响精度)。当 **yield 实现** 提前返回(比如读取到 I/O 事件)，则会立刻尝试触发事件。
+```cpp
+#include <iostream>
+#include "awacorn/event.hpp"
+void my_yield_impl(const std::chrono::steady_clock::duration& tm) {
+  if (tm == std::chrono::steady_clock::duration(0)) {
+    std::cout << "循环内不再有事件了" << std::endl;
+    // 进行一些无限阻塞的操作...
+  } else {
+    std::cout << "循环内仍有事件" << std::endl;
+    // 进行一些有定时的操作...
+    std::this_thread::sleep_for(tm);
+  }
+}
+int main() {
+  using namespace awacorn;
+  using namespace std;
+  event_loop ev;
+  ev.set_yield_impl(my_yield_impl);
+  ev.event([]() {
+    cout << "一个简单的事件，用于测试" << endl;
+  }, chrono::nanoseconds(1000));
+  ev.start();
+}
+```
 
-实际的经过时间并不完全取决于 **参考** 时间，而是取决于 **yield 实现** 函数的运行时间(**实际** 时间)，这样做可以提高事件循环精度。
-
-当参数为一个 **0** 值时，这意味着事件循环内无事件，且 **yield 实现** 可以占用无限时长的时间（比如阻塞等待直到 I/O 事件），同时向事件循环加入事件。注意，如果函数退出后事件循环内仍无事件，则事件循环将退出。
+- **yield 实现** 将接受一个 `const std::chrono::steady_clock::duration&` 作为 **参考** 的睡眠时间，这意味着函数并不需要睡眠那么久，或者可以睡眠更久(这可能会影响精度)。当 **yield 实现** 提前返回(比如读取到 I/O 事件)，则会立刻尝试触发事件。
+- 实际的经过时间并不完全取决于 **参考** 时间，而是取决于 **yield 实现** 函数的运行时间(**实际** 时间)，这样做可以提高事件循环精度。
+  - 当参数为一个 **0** 值时，这意味着事件循环内无事件，且 **yield 实现** 可以占用无限时长的时间（比如阻塞等待直到 I/O 事件），同时向事件循环加入事件。注意，如果函数退出后事件循环内仍无事件，则事件循环将退出。
 
 ### `current`
 
