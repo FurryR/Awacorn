@@ -17,11 +17,11 @@ namespace detail {
  * @tparam Args 类型序列。
  */
 template <typename T, typename... Args>
-struct contains : std::integral_constant<bool, false> {};
+struct contains : std::false_type {};
 template <typename T, typename T2, typename... Args>
 struct contains<T, T2, Args...> : contains<T, Args...> {};
 template <typename T, typename... Args>
-struct contains<T, T, Args...> : std::integral_constant<bool, true> {};
+struct contains<T, T, Args...> : std::true_type {};
 template <typename W, typename... Ts>
 struct _make_unique_impl {
   using type = W;
@@ -126,7 +126,7 @@ constexpr decltype(auto) get_if(const std::variant<Args...>& v) noexcept {
  * @return decltype(auto) std::get<I>(v) 的返回值。
  */
 template <std::size_t I, typename... Args>
-constexpr decltype(auto) get(std::variant<Args...>& v) {
+constexpr decltype(auto) get(std::variant<Args...>&& v) {
   return std::get<I>(v);
 }
 template <std::size_t I, typename... Args>
@@ -144,7 +144,7 @@ constexpr decltype(auto) get(const std::variant<Args...>& v) {
  * @return constexpr decltype(auto) std::get<T>(v) 的返回值。
  */
 template <typename T, typename... Args>
-constexpr decltype(auto) get(std::variant<Args...>& v) {
+constexpr decltype(auto) get(std::variant<Args...>&& v) {
   return std::get<T>(v);
 }
 template <typename T, typename... Args>
@@ -399,7 +399,7 @@ using unique_variant = typename detail::make_unique<variant<Args...>>::type;
  */
 template <std::size_t idx, typename... Args>
 typename detail::index_type<idx, Args...>::type* get_if(
-    variant<Args...>& v) noexcept {
+    variant<Args...>&& v) noexcept {
   static_assert(idx < sizeof...(Args), "ill-formed cast");
   if (v.index() == idx) {
     return (typename detail::index_type<idx, Args...>::type*)v._ptr;
@@ -425,7 +425,7 @@ const typename detail::index_type<idx, Args...>::type* get_if(
  * @return constexpr decltype(auto) std::get_if<T>(v) 的返回值。
  */
 template <typename T, typename... Args>
-T* get_if(variant<Args...>& v) noexcept {
+T* get_if(variant<Args...>&& v) noexcept {
   static_assert(detail::type_index<T, Args...>::value != (std::size_t)-1,
                 "ill-formed cast");
   if (v.index() == detail::type_index<T, Args...>::value) {
@@ -454,7 +454,7 @@ const T* get_if(const variant<Args...>& v) noexcept {
  * @return decltype(auto) std::get<I>(v) 的返回值。
  */
 template <std::size_t idx, typename... Args>
-inline auto get(variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
+inline auto get(variant<Args...>&& v) -> decltype(*get_if<idx>(v)) {
   static_assert(idx < sizeof...(Args), "ill-formed cast");
   auto ptr = get_if<idx>(v);
   if (ptr) return *ptr;
@@ -478,7 +478,7 @@ inline auto get(const variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
  * @return constexpr decltype(auto) std::get<T>(v) 的返回值。
  */
 template <typename T, typename... Args>
-inline auto get(variant<Args...>& v) -> decltype(*get_if<T>(v)) {
+inline auto get(variant<Args...>&& v) -> decltype(*get_if<T>(v)) {
   static_assert(detail::type_index<T, Args...>::value != (std::size_t)-1,
                 "ill-formed cast");
   auto ptr = get_if<T>(v);

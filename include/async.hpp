@@ -5,29 +5,13 @@
  * Project Awacorn 基于 MIT 协议开源。
  * Copyright(c) 凌 2023.
  */
-#if !defined(AWACORN_USE_BOOST) && !defined(AWACORN_USE_UCONTEXT)
-#if __has_include(<boost/context/continuation.hpp>)
-#define AWACORN_USE_BOOST
-#elif __has_include(<ucontext.h>)
-#define AWACORN_USE_UCONTEXT
-#else
-#error Neither <boost/context/continuation.hpp> nor <ucontext.h> is found.
-#endif
-#endif
-#if defined(AWACORN_USE_BOOST)
-#include <boost/context/continuation.hpp>
-#elif defined(AWACORN_USE_UCONTEXT)
-#ifdef __APPLE__
-#define _XOPEN_SOURCE
-#endif
-#include <ucontext.h>
-#endif
 
 #include <memory>
 #include <stdexcept>
 #include <typeinfo>
 #include <vector>
 
+#include "detail/context.hpp"
 #include "detail/function.hpp"
 #include "detail/unsafe_any.hpp"
 #include "promise.hpp"
@@ -88,58 +72,15 @@ struct context {
   }
 
  private:
-#if defined(AWACORN_USE_BOOST)
   context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
       : _status(detail::async_state_t::Pending),
-        _failbit(false),
-        _ctx(boost::context::callcc(
-            std::allocator_arg,
-            boost::context::fixedsize_stack(
-                stack_size ? stack_size
-                           : boost::context::stack_traits::default_size()),
-            [this, fn, arg](boost::context::continuation&& ctx) {
-              _ctx = ctx.resume();
-              fn(arg);
-              return std::move(_ctx);
-            })) {}
-#elif defined(AWACORN_USE_UCONTEXT)
-  context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
-      : _status(detail::async_state_t::Pending), _stack(nullptr, [](char* ptr) {
-          if (ptr) delete[] ptr;
-        }) {
-    getcontext(&_ctx);
-    if (!stack_size) stack_size = 128 * 1024;  // default stack size
-    _stack.reset(new char[stack_size]);
-    _ctx.uc_stack.ss_sp = _stack.get();
-    _ctx.uc_stack.ss_size = stack_size;
-    _ctx.uc_stack.ss_flags = 0;
-    _ctx.uc_link = nullptr;
-    makecontext(&_ctx, (void (*)(void))fn, 1, arg);
-  }
-#else
-#error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
-#endif
-  void resume() {
-#if defined(AWACORN_USE_BOOST)
-    _ctx = _ctx.resume();
-#elif defined(AWACORN_USE_UCONTEXT)
-    ucontext_t orig = _ctx;
-    swapcontext(&_ctx, &orig);
-#else
-#error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
-#endif
-  }
+        _ctx(fn, arg, stack_size),
+        _failbit(false) {}
+  inline void resume() { _ctx.resume(); }
   detail::unsafe_any _result;
   detail::async_state_t _status;
+  detail::basic_context _ctx;
   bool _failbit;
-#if defined(AWACORN_USE_BOOST)
-  boost::context::continuation _ctx;
-#elif defined(AWACORN_USE_UCONTEXT)
-  ucontext_t _ctx;
-  std::unique_ptr<char, void (*)(char*)> _stack;
-#else
-#error Please define "AWACORN_USE_UCONTEXT" or "AWACORN_USE_BOOST".
-#endif
   template <typename T>
   friend struct detail::async_fn;
   template <typename T>

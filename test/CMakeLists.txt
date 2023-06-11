@@ -1,5 +1,6 @@
 project(Awacorn_test LANGUAGES CXX)
 include_directories(../include)
+add_compile_definitions(AWACORN_USE_UCONTEXT)
 add_compile_options(-Wall -Wextra)
 # Example
 add_executable(timer example/timer.cpp)
