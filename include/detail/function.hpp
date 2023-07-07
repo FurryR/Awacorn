@@ -47,6 +47,7 @@ class function<Ret(Args...)> {
         "T is not the same as Ret(Args...)");
   }
   function(const function&) = delete;
+  function& operator=(const function&) = delete;
   function(function&& fn) : ptr(std::move(fn.ptr)) {}
   function& operator=(function&& fn) {
     return (ptr = std::move(fn.ptr)), *this;

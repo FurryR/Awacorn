@@ -45,8 +45,8 @@ struct basic_context {
 };
 #elif defined(AWACORN_USE_UCONTEXT)
 struct basic_context {
-  context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
-      : _status(detail::async_state_t::Pending), _stack(nullptr, [](char* ptr) {
+  basic_context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
+      : _stack(nullptr, [](char* ptr) {
           if (ptr) delete[] ptr;
         }) {
     getcontext(&_ctx);

@@ -39,6 +39,7 @@ struct async_fn;
 struct context {
   context() = delete;
   context(const context&) = delete;
+  context& operator=(const context&) = delete;
   /**
    * @brief 等待 promise 完成并返回 promise 的结果值。
    *
@@ -96,12 +97,13 @@ struct basic_async_fn {
   basic_async_fn(U&& fn, void (*run_fn)(void*), void* args,
                  std::size_t stack_size = 0)
       : ctx(run_fn, args, stack_size), fn(std::forward<U>(fn)) {}
-  basic_async_fn(const basic_async_fn& v) = delete;
+  basic_async_fn(const basic_async_fn&) = delete;
+  basic_async_fn& operator=(const basic_async_fn&) = delete;
 };
 template <typename RetType>
 struct async_fn : basic_async_fn<RetType(context&)>,
                   std::enable_shared_from_this<async_fn<RetType>> {
-  explicit async_fn(const async_fn& v) = delete;
+  explicit async_fn(const async_fn&) = delete;
   promise<RetType> next() {
     if (this->ctx._status == async_state_t::Pending) {
       this->ctx._status = async_state_t::Active;
@@ -169,7 +171,8 @@ struct async_fn : basic_async_fn<RetType(context&)>,
 template <>
 struct async_fn<void> : basic_async_fn<void(context&)>,
                         std::enable_shared_from_this<async_fn<void>> {
-  explicit async_fn(const async_fn& v) = delete;
+  explicit async_fn(const async_fn&) = delete;
+  async_fn& operator=(const async_fn&) = delete;
   promise<void> next() {
     if (this->ctx._status == async_state_t::Pending) {
       this->ctx._status = async_state_t::Active;

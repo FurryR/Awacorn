@@ -55,7 +55,7 @@ struct basic_promise {
   struct _then_sub_impl<void, ArgType, PromiseT, _promise> {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm,
-                                const U&& fn) {
+                                U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn](const ArgType& val) -> void {
@@ -530,7 +530,8 @@ struct promise : detail::basic_promise {
     }
     constexpr state_t status() const noexcept { return _status; }
     _promise() : _status(Pending) {}
-    _promise(const _promise& val) = delete;
+    _promise(const _promise&) = delete;
+    _promise& operator=(const _promise&) = delete;
 
    private:
     inline void reset() {
@@ -724,7 +725,8 @@ class promise<void> : detail::basic_promise {
       }
     }
     constexpr state_t status() const noexcept { return _status; }
-    _promise(const _promise& val) = delete;
+    _promise(const _promise&) = delete;
+    _promise& operator=(const _promise&) = delete;
     _promise() : _status(Pending) {}
 
    private:
@@ -799,8 +801,6 @@ class promise<void> : detail::basic_promise {
   }
   /**
    * @brief 完成此Promise。
-   *
-   * @param value 结果值。
    */
   inline void resolve() const { pm->resolve(); }
   /**

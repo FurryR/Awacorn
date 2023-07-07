@@ -1,27 +1,24 @@
 #include <iostream>
 
-#include "async.hpp"
 #include "event.hpp"
+#include "experimental/async.hpp"
 
-awacorn::promise<std::string> async_input(awacorn::event_loop* ev,
-                                          const std::string& str) {
-  awacorn::promise<std::string> pm;
-  ev->event(
-      [str, pm]() -> void {
-        std::string input;
-        std::cout << str << std::flush;
-        std::getline(std::cin, input);
-        pm.resolve(std::move(input));
-      },
-      std::chrono::nanoseconds(0));
-  return pm;
+awacorn::stmt::value<awacorn::promise<void>> print(
+    const awacorn::stmt::value<std::string>& v) {
+  return awacorn::stmt::value<awacorn::promise<void>>(
+      [v]() -> awacorn::promise<awacorn::promise<void>> {
+        awacorn::promise<awacorn::promise<void>> x;
+        v.apply()
+            .then([v]() { return v.get(); })
+            .then([x](const std::string& v) {
+              std::cout << v << std::endl;
+              x.resolve(awacorn::resolve());
+            });
+        return x;
+      });
 }
 int main() {
-  awacorn::event_loop ev;
-  awacorn::async([&](awacorn::context& ctx) {
-    std::cout << "Hello World. Input your name" << std::endl;
-    std::string name = ctx >> async_input(&ev, "Your name: ");
-    std::cout << "Welcome, " << name << "!" << std::endl;
+  awacorn::async<void>([](awacorn::context<void>& v) {
+    v << v.ret(v.await(print("Hello World")));
   });
-  ev.start();
 }

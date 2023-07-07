@@ -44,6 +44,7 @@ class task_t {
     event(const event&) = delete;
     event(event&& v)
         : fn(std::move(v.fn)), timeout(v.timeout), interval(v.interval) {}
+    event& operator=(const event&) = delete;
     event& operator=(event&& rhs) {
       fn = std::move(rhs.fn);
       timeout = rhs.timeout;
@@ -63,7 +64,7 @@ class task_t {
  *
  * @param tm 预期可用时间。
  */
-void yield_for(const std::chrono::steady_clock::duration& tm) noexcept {
+inline void yield_for(const std::chrono::steady_clock::duration& tm) noexcept {
   if (tm != std::chrono::steady_clock::duration(0)) {
     std::this_thread::sleep_for(tm);
   }
@@ -200,6 +201,7 @@ class event_loop {
   template <typename U>
   event_loop(U&& yield_impl) : _yield(std::forward<U>(yield_impl)) {}
   event_loop(const event_loop&) = delete;
+  event_loop& operator=(const event_loop&) = delete;
 };
 };  // namespace awacorn
 #endif
