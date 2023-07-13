@@ -34,12 +34,6 @@ struct capture_helper {
   constexpr capture_helper(capture_helper&& rhs) : val(std::move(rhs.val)) {}
   capture_helper& operator=(const capture_helper& rhs) = delete;
   /**
-   * @brief 借用对象的不可变左值引用。
-   *
-   * @return const T& 对象的不可变左值引用。
-   */
-  inline const T& borrow() const noexcept { return val; }
-  /**
    * @brief 借用对象的左值引用 (可用于移动构造)。
    *
    * @return T& 对象的左值引用。

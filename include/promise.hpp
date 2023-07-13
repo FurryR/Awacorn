@@ -35,17 +35,16 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) -> void {
+      pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()(val);
-          tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t](const Ret& val) { t.resolve(val); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -54,21 +53,19 @@ struct basic_promise {
             typename _promise>
   struct _then_sub_impl<void, ArgType, PromiseT, _promise> {
     template <typename U>
-    static PromiseT<void> apply(const std::shared_ptr<_promise>& pm,
-                                U&& fn) {
+    static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) -> void {
+      pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
           PromiseT<void> tmp = arg_fn.borrow()(val);
-          tmp.then([t]() -> void { t.resolve(); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t]() { t.resolve(); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -81,17 +78,16 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn]() mutable -> void {
+      pm->then([t, arg_fn]() mutable {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()();
-          tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t](const Ret& val) { t.resolve(val); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -102,17 +98,16 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn]() mutable -> void {
+      pm->then([t, arg_fn]() mutable {
         try {
           PromiseT<void> tmp = arg_fn.borrow()();
-          tmp.then([t]() -> void { t.resolve(); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t]() { t.resolve(); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -126,14 +121,14 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) mutable -> void {
+      pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
           t.resolve(arg_fn.borrow()(val));
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -156,7 +151,7 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) mutable -> void {
+      pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
           arg_fn.borrow()(val);
           t.resolve();
@@ -164,7 +159,7 @@ struct basic_promise {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -178,14 +173,14 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn]() mutable -> void {
+      pm->then([t, arg_fn]() mutable {
         try {
           t.resolve(arg_fn.borrow()());
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -207,7 +202,7 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn]() mutable -> void {
+      pm->then([t, arg_fn]() mutable {
         try {
           arg_fn.borrow()();
           t.resolve();
@@ -215,7 +210,7 @@ struct basic_promise {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) -> void { t.reject(err); });
+      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
       return t;
     }
   };
@@ -232,12 +227,11 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& val) mutable -> void {
+      pm->error([t, arg_fn](const std::exception_ptr& val) mutable {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()(val);
-          tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t](const Ret& val) { t.resolve(val); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -253,12 +247,11 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& val) mutable -> void {
+      pm->error([t, arg_fn](const std::exception_ptr& val) mutable {
         try {
           PromiseT<void> tmp = arg_fn.borrow()(val);
-          tmp.then([t]() -> void { t.resolve(); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t]() { t.resolve(); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -276,7 +269,7 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& err) mutable -> void {
+      pm->error([t, arg_fn](const std::exception_ptr& err) mutable {
         try {
           t.resolve(arg_fn.borrow()(err));
         } catch (...) {
@@ -304,7 +297,7 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& err) mutable -> void {
+      pm->error([t, arg_fn](const std::exception_ptr& err) mutable {
         try {
           arg_fn.borrow()(err);
         } catch (...) {
@@ -326,12 +319,11 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->finally([t, arg_fn]() mutable -> void {
+      pm->finally([t, arg_fn]() mutable {
         try {
           PromiseT<Ret> tmp = arg_fn.borrow()();
-          tmp.then([t](const Ret& val) -> void { t.resolve(val); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t](const Ret& val) { t.resolve(val); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -346,12 +338,11 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->finally([t, arg_fn]() mutable -> void {
+      pm->finally([t, arg_fn]() mutable {
         try {
           PromiseT<void> tmp = arg_fn.borrow()();
-          tmp.then([t]() -> void { t.resolve(); });
-          tmp.error(
-              [t](const std::exception_ptr& err) -> void { t.reject(err); });
+          tmp.then([t]() { t.resolve(); });
+          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -369,7 +360,7 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->finally([t, arg_fn]() mutable -> void {
+      pm->finally([t, arg_fn]() mutable {
         try {
           t.resolve(arg_fn.borrow()());
         } catch (...) {
@@ -397,7 +388,7 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
-      pm->finally([t, arg_fn]() mutable -> void {
+      pm->finally([t, arg_fn]() mutable {
         try {
           arg_fn.borrow()();
         } catch (...) {
@@ -411,11 +402,11 @@ struct basic_promise {
   };
 };
 template <typename T, template <typename T2> class PromiseT>
-struct remove_promise {
+struct extract_from {
   using type = T;
 };
 template <typename T, template <typename T2> class PromiseT>
-struct remove_promise<PromiseT<T>, PromiseT> {
+struct extract_from<PromiseT<T>, PromiseT> {
   using type = T;
 };
 template <typename T, typename ReplaceT>
@@ -450,7 +441,7 @@ struct promise : detail::basic_promise {
           detail::capture_helper<type> arg_then =
               detail::capture(std::move(_then));
           detail::capture_helper<type> arg_fn = detail::capture(std::move(fn));
-          _then = [arg_then, arg_fn](const value_type& res) -> void {
+          _then = [arg_then, arg_fn](const value_type& res) mutable {
             arg_then.borrow()(res);
             arg_fn.borrow()(res);
           };
@@ -467,7 +458,7 @@ struct promise : detail::basic_promise {
               detail::capture(std::move(_error));
           detail::capture_helper<error_type> arg_fn =
               detail::capture(std::move(fn));
-          _error = [arg_error, arg_fn](const std::exception_ptr& err) -> void {
+          _error = [arg_error, arg_fn](const std::exception_ptr& err) mutable {
             arg_error.borrow()(err);
             arg_fn.borrow()(err);
           };
@@ -484,7 +475,7 @@ struct promise : detail::basic_promise {
               detail::capture(std::move(_finally));
           detail::capture_helper<finally_type> arg_fn =
               detail::capture(std::move(fn));
-          _finally = [arg_finally, arg_fn]() -> void {
+          _finally = [arg_finally, arg_fn]() mutable {
             arg_finally.borrow()();
             arg_fn.borrow()();
           };
@@ -559,7 +550,7 @@ struct promise : detail::basic_promise {
       decltype(fn(std::declval<value_type>())), promise>::type 对函数的 promise
    */
   template <typename U>
-  inline auto then(U&& fn) const -> promise<typename detail::remove_promise<
+  inline auto then(U&& fn) const -> promise<typename detail::extract_from<
       decltype(fn(std::declval<value_type>())), promise>::type> {
     using Ret = decltype(fn(std::declval<value_type>()));
     return _then_impl<Ret, value_type, promise, _promise>::apply(
@@ -577,7 +568,7 @@ struct promise : detail::basic_promise {
       promise>::type> 对函数的 Promise。
    */
   template <typename U>
-  inline auto error(U&& fn) const -> promise<typename detail::remove_promise<
+  inline auto error(U&& fn) const -> promise<typename detail::extract_from<
       decltype(fn(std::declval<std::exception_ptr>())), promise>::type> {
     using Ret = decltype(fn(std::declval<std::exception_ptr>()));
     return _error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
@@ -595,8 +586,8 @@ struct promise : detail::basic_promise {
    Promise。
    */
   template <typename U>
-  inline auto finally(U&& fn) const -> promise<
-      typename detail::remove_promise<decltype(fn()), promise>::type> {
+  inline auto finally(U&& fn) const
+      -> promise<typename detail::extract_from<decltype(fn()), promise>::type> {
     using Ret = decltype(fn());
     return _finally_impl<Ret, promise, _promise>::apply(pm,
                                                         std::forward<U>(fn));
@@ -656,7 +647,7 @@ class promise<void> : detail::basic_promise {
           detail::capture_helper<type> arg_then =
               detail::capture(std::move(_then));
           detail::capture_helper<type> arg_fn = detail::capture(std::move(fn));
-          _then = [arg_then, arg_fn]() -> void {
+          _then = [arg_then, arg_fn]() mutable {
             arg_then.borrow()();
             arg_fn.borrow()();
           };
@@ -673,7 +664,7 @@ class promise<void> : detail::basic_promise {
               detail::capture(std::move(_error));
           detail::capture_helper<error_type> arg_fn =
               detail::capture(std::move(fn));
-          _error = [arg_error, arg_fn](const std::exception_ptr& err) -> void {
+          _error = [arg_error, arg_fn](const std::exception_ptr& err) mutable {
             arg_error.borrow()(err);
             arg_fn.borrow()(err);
           };
@@ -690,7 +681,7 @@ class promise<void> : detail::basic_promise {
               detail::capture(std::move(_finally));
           detail::capture_helper<finally_type> arg_fn =
               detail::capture(std::move(fn));
-          _finally = [arg_finally, arg_fn]() -> void {
+          _finally = [arg_finally, arg_fn]() mutable {
             arg_finally.borrow()();
             arg_fn.borrow()();
           };
@@ -757,8 +748,8 @@ class promise<void> : detail::basic_promise {
    promise
    */
   template <typename U>
-  inline auto then(U&& fn) const -> promise<
-      typename detail::remove_promise<decltype(fn()), promise>::type> {
+  inline auto then(U&& fn) const
+      -> promise<typename detail::extract_from<decltype(fn()), promise>::type> {
     using Ret = decltype(fn());
     return _then_impl<Ret, void, promise, _promise>::apply(pm,
                                                            std::forward<U>(fn));
@@ -775,7 +766,7 @@ class promise<void> : detail::basic_promise {
       promise>::type> 对函数的 Promise。
    */
   template <typename U>
-  inline auto error(U&& fn) const -> promise<typename detail::remove_promise<
+  inline auto error(U&& fn) const -> promise<typename detail::extract_from<
       decltype(fn(std::declval<std::exception_ptr>())), promise>::type> {
     using Ret = decltype(fn(std::declval<std::exception_ptr>()));
     return _error_impl<Ret, promise, _promise>::apply(pm, std::forward<U>(fn));
@@ -793,8 +784,8 @@ class promise<void> : detail::basic_promise {
    Promise。
    */
   template <typename U>
-  inline auto finally(U&& fn) const -> promise<
-      typename detail::remove_promise<decltype(fn()), promise>::type> {
+  inline auto finally(U&& fn) const
+      -> promise<typename detail::extract_from<decltype(fn()), promise>::type> {
     using Ret = decltype(fn());
     return _finally_impl<Ret, promise, _promise>::apply(pm,
                                                         std::forward<U>(fn));
@@ -842,7 +833,7 @@ struct promise_all {
                            const promise<T>& current, Args&&... args) {
     promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                           std::forward<Args>(args)...);
-    current.then([result, done_count, pm](const T& value) -> void {
+    current.then([result, done_count, pm](const T& value) {
       if (result) {
         std::get<N>(*result) = value;
         if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
@@ -850,7 +841,7 @@ struct promise_all {
         }
       }
     });
-    current.error([pm](const std::exception_ptr& v) -> void { pm.reject(v); });
+    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
   }
   template <typename... Args>
   static inline void apply(const promise<ResultType>& pm,
@@ -859,7 +850,7 @@ struct promise_all {
                            const promise<void>& current, Args&&... args) {
     promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                           std::forward<Args>(args)...);
-    current.then([result, done_count, pm]() -> void {
+    current.then([result, done_count, pm]() {
       if (result) {
         std::get<N>(*result) = monostate();
         if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
@@ -867,7 +858,7 @@ struct promise_all {
         }
       }
     });
-    current.error([pm](const std::exception_ptr& v) -> void { pm.reject(v); });
+    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
   }
   static inline void apply(const promise<ResultType>&,
                            const std::shared_ptr<ResultType>&,
@@ -940,7 +931,7 @@ struct promise_all_settled {
                            const promise<T>& current, Args&&... args) {
     promise_all_settled<ResultType, N - 1>::apply(pm, result, done_count,
                                                   std::forward<Args>(args)...);
-    current.finally([result, done_count, current, pm]() -> void {
+    current.finally([result, done_count, current, pm]() {
       if (result) {
         std::get<N>(*result) = current;
         if ((++(*done_count)) == std::tuple_size<ResultType>::value) {

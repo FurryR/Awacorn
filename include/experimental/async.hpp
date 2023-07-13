@@ -1,5 +1,6 @@
 #ifndef _AWACORN_EXPERIMENTAL_ASYNC
 #define _AWACORN_EXPERIMENTAL_ASYNC
+#include <tuple>
 #include <type_traits>
 #if __cplusplus >= 201101L
 /**
@@ -12,7 +13,24 @@
 #include "../detail/function.hpp"
 #include "../promise.hpp"
 namespace awacorn {
+namespace stmt {
+template <typename>
+struct value;
+};
 namespace detail {
+template <std::size_t... Is>
+struct index_sequence {};
+template <std::size_t I, std::size_t... Is>
+struct make_index_sequence : make_index_sequence<I - 1, I - 1, Is...> {};
+template <std::size_t... Is>
+struct make_index_sequence<0, Is...> : index_sequence<Is...> {};
+
+template <typename>
+struct _is_value_impl : std::false_type {};
+template <typename T>
+struct _is_value_impl<stmt::value<T>> : std::true_type {};
+template <typename T>
+using is_value = _is_value_impl<typename std::decay<T>::type>;
 template <typename T>
 struct _value {
   promise<T> get() const noexcept { return pm; }
@@ -77,6 +95,84 @@ struct expr {
   expr(expr&& v) : fn(std::move(v.fn)) {}
   detail::function<promise<void>(context<Ctx>&)> fn;
 };
+class _value_get_impl {
+  template <
+      std::size_t I, std::size_t... Is, typename U, typename T,
+      typename... Args, typename... Args2,
+      typename = typename std::enable_if<!detail::is_value<T>::value>::type>
+  static auto _apply(const std::shared_ptr<std::tuple<Args2...>>& ptr,
+                     detail::index_sequence<Is...>, U&& fn, T&& v,
+                     Args&&... args)
+      -> promise<decltype(fn(std::declval<Args2>()...))> {
+    std::get<I>(*ptr) = std::forward<T>(v);
+    return _apply<I + 1>(ptr,
+                         detail::make_index_sequence < sizeof...(Args) == 0
+                             ? 0
+                             : sizeof...(Args) - 1 > (),
+                         std::forward<U>(fn), std::forward<Args>(args)...);
+  }
+  template <std::size_t I, std::size_t... Is, typename U, typename T,
+            typename... Args, typename... Args2>
+  static auto _apply(const std::shared_ptr<std::tuple<Args2...>>& ptr,
+                     detail::index_sequence<Is...>, U&& fn, const value<T>& v,
+                     Args&&... args)
+      -> promise<decltype(fn(std::declval<Args2>()...))> {
+    detail::capture_helper<U> _fn = detail::capture(std::forward<U>(fn));
+    detail::capture_helper<std::tuple<Args...>> _args =
+        detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    return v.apply().then([ptr, v, _fn, _args]() mutable {
+      return v.get().then([ptr, v, _fn, _args](const T& x) mutable {
+        std::get<I>(*ptr) = x;
+        return _apply<I + 1>(ptr,
+                             detail::make_index_sequence < sizeof...(Args) == 0
+                                 ? 0
+                                 : sizeof...(Args) - 1 > (),
+                             std::move(_fn.borrow()),
+                             std::get<Is>(std::move(_args.borrow()))...);
+      });
+    });
+  }
+  template <std::size_t, std::size_t... Is, typename U, typename... Args2>
+  static auto _apply(const std::shared_ptr<std::tuple<Args2...>>& ptr,
+                     detail::index_sequence<Is...>, U&& fn)
+      -> promise<decltype(fn(std::declval<Args2>()...))> {
+    return resolve(_call(std::forward<U>(fn),
+                         detail::make_index_sequence<sizeof...(Args2)>(),
+                         std::move(*ptr)));
+  }
+  template <typename U, std::size_t... Is, typename... Args>
+  static auto _call(U&& fn, detail::index_sequence<Is...>,
+                    std::tuple<Args...>&& args)
+      -> decltype(fn(std::declval<Args>()...)) {
+    return fn(std::get<Is>(std::move(args))...);
+  }
+
+ public:
+  template <typename... Args, typename U, typename... Args2, std::size_t... Is>
+  static auto apply(const std::shared_ptr<std::tuple<Args2...>>& ptr, U&& fn,
+                    std::tuple<Args...>&& args, detail::index_sequence<Is...>)
+      -> promise<decltype(fn(std::declval<Args2>()...))> {
+    return _apply<0>(ptr, detail::make_index_sequence<sizeof...(Args) - 1>(),
+                     std::forward<U>(fn), std::get<Is>(std::move(args))...);
+  }
+};
+template <typename T, typename T2,
+          typename V2 = typename detail::extract_from<
+              typename std::decay<T2>::type, value>::type>
+auto operator+(const value<T>& v, T2&& v2)
+    -> value<decltype(std::declval<T>() + std::declval<V2>())> {
+  return v.get([](const T& v, const V2& v2) { return v + v2; },
+               std::forward<T2>(v2));
+}
+template <typename T, typename T2,
+          typename V = typename detail::extract_from<
+              typename std::decay<T>::type, value>::type,
+          typename = typename std::enable_if<!detail::is_value<T>::value>::type>
+auto operator+(T&& v, const value<T2>& v2)
+    -> value<decltype(std::declval<V>() + std::declval<T2>())> {
+  return v2.get([](const T2& v2, const V& v) { return v2 + v; },
+                std::forward<T>(v));
+}
 template <typename T>
 struct value {
   template <
@@ -98,16 +194,24 @@ struct value {
     ptr = std::make_shared<detail::_value<T>>(
         [_v]() mutable { return resolve<T>(std::move(_v.borrow())); });
   };
-
-  template <typename U>
-  auto get(U&& fn) const -> value<decltype(fn(std::declval<T>()))> {
-    using Ret = decltype(fn(std::declval<T>()));
+  template <typename U, typename... Args,
+            typename Ret = decltype(std::declval<U>()(
+                std::declval<T>(),
+                std::declval<typename detail::extract_from<
+                    typename std::decay<Args>::type, value>::type>()...))>
+  auto get(U&& fn, Args&&... args) const -> value<Ret> {
     detail::capture_helper<U> _fn = detail::capture(std::forward<U>(fn));
-    std::shared_ptr<detail::_value<T>> _ptr = ptr;
-    return value<Ret>([_ptr, _fn]() mutable {
-      return _ptr->apply()
-          .then([_ptr]() { return _ptr->get(); })
-          .then([_fn](const T& val) { return _fn.borrow()(val); });
+    detail::capture_helper<std::tuple<typename std::decay<Args>::type...>>
+        _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    value<T> val = *this;
+    return value<Ret>([val, _fn, _args]() mutable {
+      return _value_get_impl::apply(
+          std::make_shared<std::tuple<
+              T, typename detail::extract_from<typename std::decay<Args>::type,
+                                               value>::type...>>(),
+          std::move(_fn.borrow()),
+          std::tuple_cat(std::forward_as_tuple(val), std::move(_args.borrow())),
+          detail::make_index_sequence<sizeof...(Args) + 1>());
     });
   }
 
@@ -134,15 +238,20 @@ struct value<void> {
         []() mutable { return resolve(); });
   }
 
-  template <typename U>
-  auto get(U&& fn) const -> value<decltype(fn())> {
-    using Ret = decltype(fn());
+  template <typename U, typename... Args,
+            typename Ret = decltype(std::declval<U>()(
+                std::declval<typename detail::extract_from<
+                    typename std::decay<Args>::type, value>::type>()...))>
+  auto get(U&& fn, Args&&... args) const -> value<Ret> {
     detail::capture_helper<U> _fn = detail::capture(std::forward<U>(fn));
-    std::shared_ptr<detail::_value<void>> _ptr = ptr;
-    return value<Ret>([_ptr, _fn]() mutable {
-      return _ptr->apply().then([_ptr]() { return _ptr->get(); }).then([_fn]() {
-        return _fn.borrow()();
-      });
+    detail::capture_helper<std::tuple<typename std::decay<Args>::type...>>
+        _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    return value<Ret>([_fn, _args]() mutable {
+      return _value_get_impl::apply(
+          std::make_shared<std::tuple<typename detail::extract_from<
+              typename std::decay<Args>::type, value>::type...>>(),
+          std::move(_fn.borrow()), std::move(_args.borrow()),
+          detail::make_index_sequence<sizeof...(Args) + 1>());
     });
   }
 
@@ -155,6 +264,8 @@ struct value<void> {
 
   std::shared_ptr<detail::_value<void>> ptr;
 };
+template <typename T>
+using var = value<T*>;
 };  // namespace stmt
 template <typename T>
 struct context;
@@ -214,16 +325,18 @@ template <>
 struct context<void> : public detail::basic_context<void> {
   template <typename U>
   context& operator<<(U&& v) {
-    detail::capture_helper<U> _v = detail::capture(std::forward<U>(v));
-    std::shared_ptr<context<void>> ptr = this->shared_from_this();
-    chain = chain.then([ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
+    if (result.status() != Fulfilled) {
+      detail::capture_helper<U> _v = detail::capture(std::forward<U>(v));
+      std::shared_ptr<context<void>> ptr = this->shared_from_this();
+      chain =
+          chain.then([ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
+    }
     return *this;
   }
-  static stmt::expr<void> ret(const stmt::value<void>& v) {
-    return stmt::expr<void>([v](context<void>& ctx) {
-      return v.apply().then([v]() { return v.get(); }).then([&ctx]() {
-        ctx.resolve();
-      });
+  static stmt::expr<void> ret() {
+    return stmt::expr<void>([](context<void>& ctx) {
+      ctx.resolve();
+      return awacorn::resolve();
     });
   }
 

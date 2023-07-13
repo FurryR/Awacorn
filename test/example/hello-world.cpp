@@ -1,24 +1,37 @@
 #include <iostream>
 
-#include "event.hpp"
 #include "experimental/async.hpp"
 
-awacorn::stmt::value<awacorn::promise<void>> print(
-    const awacorn::stmt::value<std::string>& v) {
-  return awacorn::stmt::value<awacorn::promise<void>>(
-      [v]() -> awacorn::promise<awacorn::promise<void>> {
-        awacorn::promise<awacorn::promise<void>> x;
-        v.apply()
-            .then([v]() { return v.get(); })
-            .then([x](const std::string& v) {
-              std::cout << v << std::endl;
-              x.resolve(awacorn::resolve());
-            });
-        return x;
-      });
+using awacorn::async;
+using awacorn::context;
+using awacorn::promise;
+using awacorn::stmt::value;
+
+value<promise<void>> print(const value<std::string>& v) {
+  return value<promise<void>>([v]() {
+    promise<promise<void>> x;
+    v.apply().then([v]() { return v.get(); }).then([x](const std::string& v) {
+      std::cout << v;
+      x.resolve(awacorn::resolve());
+    });
+    return x;
+  });
+}
+value<promise<std::string>> input() {
+  return value<promise<std::string>>([]() {
+    promise<promise<std::string>> x;
+    std::string str;
+    std::getline(std::cin, str);
+    x.resolve(awacorn::resolve(std::move(str)));
+    return x;
+  });
 }
 int main() {
-  awacorn::async<void>([](awacorn::context<void>& v) {
-    v << v.ret(v.await(print("Hello World")));
+  async<void>([](context<void>& v) {
+    v << v.await(print("Hello World!\n"));
+    v << v.await(print("Please input a string: "));
+    v << v.await(
+        print("Your input is: " + v.await(input()) + "\n"));
+    v << v.ret();
   });
 }
