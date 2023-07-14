@@ -2,6 +2,7 @@
 #define _AWACORN_EXPERIMENTAL_ASYNC
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #if __cplusplus >= 201101L
 /**
  * Project Awacorn 基于 MIT 协议开源。
@@ -16,6 +17,8 @@ namespace awacorn {
 namespace stmt {
 template <typename>
 struct value;
+template <typename T>
+using var = value<T*>;
 };
 namespace detail {
 template <std::size_t... Is>
@@ -264,8 +267,6 @@ struct value<void> {
 
   std::shared_ptr<detail::_value<void>> ptr;
 };
-template <typename T>
-using var = value<T*>;
 };  // namespace stmt
 template <typename T>
 struct context;
@@ -287,6 +288,37 @@ struct basic_context : public std::enable_shared_from_this<context<T>> {
           .then([&ctx](const std::exception_ptr& v) { ctx.reject(v); });
     });
   }
+  template <typename U>
+  stmt::var<U> create(const std::string& name, U&& v) {
+    return stmt::var<U>(
+        local
+            .insert_or_assign(
+                name,
+                std::unique_ptr<void, void (*)(void*)>(
+                    new typename std::decay<U>::type(std::forward<U>(obj)),
+                    [](void* ptr) {
+                      using Decay = typename std::decay<U>::type;
+                      ((Decay*)ptr)->~Decay();
+                    }))
+            .second.get());
+  }
+  template <typename U>
+  stmt::var<U> create(std::string&& name, U&& v) {
+    return stmt::var<U>(
+        local
+            .insert_or_assign(
+                std::move(name),
+                std::unique_ptr<void, void (*)(void*)>(
+                    new typename std::decay<U>::type(std::forward<U>(obj)),
+                    [](void* ptr) {
+                      using Decay = typename std::decay<U>::type;
+                      ((Decay*)ptr)->~Decay();
+                    }))
+            .second.get());
+  }
+
+ protected:
+  std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>> local;
 };
 };  // namespace detail
 template <typename T>
