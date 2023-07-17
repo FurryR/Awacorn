@@ -78,25 +78,25 @@ class event_loop {
   detail::function<void(const std::chrono::steady_clock::duration&)> _yield;
   bool _execute() {
     if (!_event.empty()) {
-      std::list<task_t::event>::const_iterator min = _event.cend();
-      for (std::list<task_t::event>::const_iterator it = _event.cbegin();
+      auto min = _event.cend();
+      for (auto it = _event.cbegin();
            it != _event.cend(); it++) {
         if (min == _event.cend() || it->timeout < min->timeout) min = it;
       }
-      std::chrono::steady_clock::time_point tm =
+      auto tm =
           std::chrono::steady_clock::now();
       if (min->timeout > std::chrono::steady_clock::duration(0))
         _yield(min->timeout);
-      std::chrono::steady_clock::duration duration =
+      auto duration =
           std::chrono::steady_clock::now() - tm;
-      for (std::list<task_t::event>::iterator it = _event.begin();
+      for (auto it = _event.begin();
            it != _event.end(); it++) {
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
                           : std::chrono::steady_clock::duration(0);
       }
       tm = std::chrono::steady_clock::now();
-      for (std::list<task_t::event>::iterator it = _event.begin();
+      for (auto it = _event.begin();
            it != _event.end();) {
         if (it->timeout == std::chrono::steady_clock::duration(0)) {
           _current = it;
@@ -109,7 +109,7 @@ class event_loop {
         it++;
       }
       duration = std::chrono::steady_clock::now() - tm;
-      for (std::list<task_t::event>::iterator it = _event.begin();
+      for (auto it = _event.begin();
            it != _event.end(); it++) {
         it->timeout = it->timeout > duration
                           ? (it->timeout - duration)
@@ -168,7 +168,7 @@ class event_loop {
    */
   template <typename Rep, typename Period, typename U>
   inline task_t interval(U&& fn, const std::chrono::duration<Rep, Period>& tm) {
-    detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+    auto arg_fn = detail::capture(std::forward<U>(fn));
     return _create(
         &_event,
         [this, arg_fn, tm]() mutable {

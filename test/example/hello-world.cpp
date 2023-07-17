@@ -6,6 +6,7 @@ using awacorn::async;
 using awacorn::context;
 using awacorn::promise;
 using awacorn::stmt::value;
+using awacorn::stmt::var;
 
 value<promise<void>> print(const value<std::string>& v) {
   return value<promise<void>>([v]() {
@@ -28,10 +29,13 @@ value<promise<std::string>> input() {
 }
 int main() {
   async<void>([](context<void>& v) {
+    var<std::string> a = v.create("a", std::string());
     v << v.await(print("Hello World!\n"));
     v << v.await(print("Please input a string: "));
-    v << v.await(
-        print("Your input is: " + v.await(input()) + "\n"));
+    v << (a = v.await(input()));
+    v << v.await(print("Your input is: " + a + "\n"));
+    v << v.cond(a == "awa",
+                [](context<void>& v) { v << v.await(print("OK\n")); });
     v << v.ret();
   });
 }

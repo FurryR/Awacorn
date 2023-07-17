@@ -34,10 +34,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
-          PromiseT<Ret> tmp = arg_fn.borrow()(val);
+          auto tmp = arg_fn.borrow()(val);
           tmp.then([t](const Ret& val) { t.resolve(val); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -55,10 +55,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
-          PromiseT<void> tmp = arg_fn.borrow()(val);
+          auto tmp = arg_fn.borrow()(val);
           tmp.then([t]() { t.resolve(); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -77,10 +77,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn]() mutable {
         try {
-          PromiseT<Ret> tmp = arg_fn.borrow()();
+          auto tmp = arg_fn.borrow()();
           tmp.then([t](const Ret& val) { t.resolve(val); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -97,10 +97,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn]() mutable {
         try {
-          PromiseT<void> tmp = arg_fn.borrow()();
+          auto tmp = arg_fn.borrow()();
           tmp.then([t]() { t.resolve(); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -120,7 +120,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
           t.resolve(arg_fn.borrow()(val));
@@ -150,7 +150,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn](const ArgType& val) mutable {
         try {
           arg_fn.borrow()(val);
@@ -172,7 +172,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn]() mutable {
         try {
           t.resolve(arg_fn.borrow()());
@@ -201,7 +201,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->then([t, arg_fn]() mutable {
         try {
           arg_fn.borrow()();
@@ -226,10 +226,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->error([t, arg_fn](const std::exception_ptr& val) mutable {
         try {
-          PromiseT<Ret> tmp = arg_fn.borrow()(val);
+          auto tmp = arg_fn.borrow()(val);
           tmp.then([t](const Ret& val) { t.resolve(val); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -246,10 +246,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->error([t, arg_fn](const std::exception_ptr& val) mutable {
         try {
-          PromiseT<void> tmp = arg_fn.borrow()(val);
+          auto tmp = arg_fn.borrow()(val);
           tmp.then([t]() { t.resolve(); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -268,7 +268,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->error([t, arg_fn](const std::exception_ptr& err) mutable {
         try {
           t.resolve(arg_fn.borrow()(err));
@@ -296,7 +296,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->error([t, arg_fn](const std::exception_ptr& err) mutable {
         try {
           arg_fn.borrow()(err);
@@ -318,10 +318,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->finally([t, arg_fn]() mutable {
         try {
-          PromiseT<Ret> tmp = arg_fn.borrow()();
+          auto tmp = arg_fn.borrow()();
           tmp.then([t](const Ret& val) { t.resolve(val); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -337,10 +337,10 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->finally([t, arg_fn]() mutable {
         try {
-          PromiseT<void> tmp = arg_fn.borrow()();
+          auto tmp = arg_fn.borrow()();
           tmp.then([t]() { t.resolve(); });
           tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
         } catch (...) {
@@ -359,7 +359,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->finally([t, arg_fn]() mutable {
         try {
           t.resolve(arg_fn.borrow()());
@@ -387,7 +387,7 @@ struct basic_promise {
     template <typename U>
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
-      detail::capture_helper<U> arg_fn = detail::capture(std::forward<U>(fn));
+      auto arg_fn = detail::capture(std::forward<U>(fn));
       pm->finally([t, arg_fn]() mutable {
         try {
           arg_fn.borrow()();
@@ -438,9 +438,8 @@ struct promise : detail::basic_promise {
         fn(get<value_type>(_val));
       } else if (_status == Pending) {
         if (_then) {
-          detail::capture_helper<type> arg_then =
-              detail::capture(std::move(_then));
-          detail::capture_helper<type> arg_fn = detail::capture(std::move(fn));
+          auto arg_then = detail::capture(std::move(_then));
+          auto arg_fn = detail::capture(std::move(fn));
           _then = [arg_then, arg_fn](const value_type& res) mutable {
             arg_then.borrow()(res);
             arg_fn.borrow()(res);
@@ -454,10 +453,8 @@ struct promise : detail::basic_promise {
         fn(get<std::exception_ptr>(_val));
       } else if (_status == Pending) {
         if (_error) {
-          detail::capture_helper<error_type> arg_error =
-              detail::capture(std::move(_error));
-          detail::capture_helper<error_type> arg_fn =
-              detail::capture(std::move(fn));
+          auto arg_error = detail::capture(std::move(_error));
+          auto arg_fn = detail::capture(std::move(fn));
           _error = [arg_error, arg_fn](const std::exception_ptr& err) mutable {
             arg_error.borrow()(err);
             arg_fn.borrow()(err);
@@ -471,10 +468,8 @@ struct promise : detail::basic_promise {
         fn();
       } else {
         if (_finally) {
-          detail::capture_helper<finally_type> arg_finally =
-              detail::capture(std::move(_finally));
-          detail::capture_helper<finally_type> arg_fn =
-              detail::capture(std::move(fn));
+          auto arg_finally = detail::capture(std::move(_finally));
+          auto arg_fn = detail::capture(std::move(fn));
           _finally = [arg_finally, arg_fn]() mutable {
             arg_finally.borrow()();
             arg_fn.borrow()();
@@ -644,9 +639,8 @@ class promise<void> : detail::basic_promise {
         fn();
       } else if (_status == Pending) {
         if (_then) {
-          detail::capture_helper<type> arg_then =
-              detail::capture(std::move(_then));
-          detail::capture_helper<type> arg_fn = detail::capture(std::move(fn));
+          auto arg_then = detail::capture(std::move(_then));
+          auto arg_fn = detail::capture(std::move(fn));
           _then = [arg_then, arg_fn]() mutable {
             arg_then.borrow()();
             arg_fn.borrow()();
@@ -660,10 +654,8 @@ class promise<void> : detail::basic_promise {
         fn(_val);
       } else if (_status == Pending) {
         if (_error) {
-          detail::capture_helper<error_type> arg_error =
-              detail::capture(std::move(_error));
-          detail::capture_helper<error_type> arg_fn =
-              detail::capture(std::move(fn));
+          auto arg_error = detail::capture(std::move(_error));
+          auto arg_fn = detail::capture(std::move(fn));
           _error = [arg_error, arg_fn](const std::exception_ptr& err) mutable {
             arg_error.borrow()(err);
             arg_fn.borrow()(err);
@@ -677,10 +669,8 @@ class promise<void> : detail::basic_promise {
         fn();
       } else {
         if (_finally) {
-          detail::capture_helper<finally_type> arg_finally =
-              detail::capture(std::move(_finally));
-          detail::capture_helper<finally_type> arg_fn =
-              detail::capture(std::move(fn));
+          auto arg_finally = detail::capture(std::move(_finally));
+          auto arg_fn = detail::capture(std::move(fn));
           _finally = [arg_finally, arg_fn]() mutable {
             arg_finally.borrow()();
             arg_fn.borrow()();
@@ -961,8 +951,8 @@ all(const promise<Args>&... args) {
   using ResultType =
       std::tuple<typename detail::replace_void<Args, monostate>::type...>;
   promise<ResultType> pm;
-  std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
-  std::shared_ptr<std::size_t> done_count = std::make_shared<std::size_t>(0);
+  auto result = std::make_shared<ResultType>();
+  auto done_count = std::make_shared<std::size_t>(0);
   detail::promise_all<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;
@@ -983,8 +973,8 @@ any(const promise<Args>&... args) {
   promise<awacorn::unique_variant<
       typename detail::replace_void<Args, monostate>::type...>>
       pm;
-  std::shared_ptr<std::size_t> fail_count = std::make_shared<std::size_t>(0);
-  std::shared_ptr<std::array<std::exception_ptr, sizeof...(Args)>> exce =
+  auto fail_count = std::make_shared<std::size_t>(0);
+  auto exce =
       std::make_shared<std::array<std::exception_ptr, sizeof...(Args)>>();
   detail::promise_any<sizeof...(Args), sizeof...(Args) - 1>::apply(
       pm, exce, fail_count, args...);
@@ -1025,8 +1015,8 @@ static inline promise<std::tuple<promise<Args>...>> all_settled(
     const promise<Args>&... args) {
   using ResultType = std::tuple<promise<Args>...>;
   promise<ResultType> pm;
-  std::shared_ptr<ResultType> result = std::make_shared<ResultType>();
-  std::shared_ptr<std::size_t> done_count = std::make_shared<std::size_t>(0);
+  auto result = std::make_shared<ResultType>();
+  auto done_count = std::make_shared<std::size_t>(0);
   detail::promise_all_settled<ResultType, sizeof...(Args) - 1>::apply(
       pm, result, done_count, args...);
   return pm;

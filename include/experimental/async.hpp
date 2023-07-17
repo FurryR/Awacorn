@@ -19,7 +19,7 @@ template <typename>
 struct value;
 template <typename T>
 using var = value<T*>;
-};
+};  // namespace stmt
 namespace detail {
 template <std::size_t... Is>
 struct index_sequence {};
@@ -120,18 +120,18 @@ class _value_get_impl {
                      detail::index_sequence<Is...>, U&& fn, const value<T>& v,
                      Args&&... args)
       -> promise<decltype(fn(std::declval<Args2>()...))> {
-    detail::capture_helper<U> _fn = detail::capture(std::forward<U>(fn));
-    detail::capture_helper<std::tuple<Args...>> _args =
-        detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    auto _fn = detail::capture(std::forward<U>(fn));
+    auto _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
     return v.apply().then([ptr, v, _fn, _args]() mutable {
       return v.get().then([ptr, v, _fn, _args](const T& x) mutable {
+        auto&& args = _args.borrow();
         std::get<I>(*ptr) = x;
         return _apply<I + 1>(ptr,
                              detail::make_index_sequence < sizeof...(Args) == 0
                                  ? 0
                                  : sizeof...(Args) - 1 > (),
                              std::move(_fn.borrow()),
-                             std::get<Is>(std::move(_args.borrow()))...);
+                             std::get<Is>(std::move(args))...);
       });
     });
   }
@@ -159,6 +159,7 @@ class _value_get_impl {
                      std::forward<U>(fn), std::get<Is>(std::move(args))...);
   }
 };
+// value operator+
 template <typename T, typename T2,
           typename V2 = typename detail::extract_from<
               typename std::decay<T2>::type, value>::type>
@@ -173,8 +174,72 @@ template <typename T, typename T2,
           typename = typename std::enable_if<!detail::is_value<T>::value>::type>
 auto operator+(T&& v, const value<T2>& v2)
     -> value<decltype(std::declval<V>() + std::declval<T2>())> {
-  return v2.get([](const T2& v2, const V& v) { return v2 + v; },
+  return v2.get([](const T2& v2, const V& v) { return v + v2; },
                 std::forward<T>(v));
+}
+// var operator+
+template <typename T, typename T2,
+          typename V2 = typename detail::extract_from<
+              typename std::decay<T2>::type, value>::type>
+auto operator+(const var<T>& v, T2&& v2)
+    -> value<decltype(std::declval<T>() + std::declval<V2>())> {
+  return v.get([](T* v, const V2& v2) { return (*v) + v2; },
+               std::forward<T2>(v2));
+}
+template <typename T, typename T2,
+          typename V = typename detail::extract_from<
+              typename std::decay<T>::type, value>::type,
+          typename = typename std::enable_if<!detail::is_value<T>::value>::type>
+auto operator+(T&& v, const var<T2>& v2)
+    -> value<decltype(std::declval<V>() + std::declval<T2>())> {
+  return v2.get([](T2* v2, const V& v) { return v + (*v2); },
+                std::forward<T>(v));
+}
+template <typename T, typename T2>
+auto operator+(const var<T>& v, const var<T2>& v2)
+    -> value<decltype(std::declval<T>() + std::declval<T2>())> {
+  return v.get([](T* v, T2* v2) { return (*v) + (*v2); }, v2);
+}
+// value operator==
+template <typename T, typename T2,
+          typename V2 = typename detail::extract_from<
+              typename std::decay<T2>::type, value>::type>
+auto operator==(const value<T>& v, T2&& v2)
+    -> value<decltype(std::declval<T>() == std::declval<V2>())> {
+  return v.get([](const T& v, const V2& v2) { return v == v2; },
+               std::forward<T2>(v2));
+}
+template <typename T, typename T2,
+          typename V = typename detail::extract_from<
+              typename std::decay<T>::type, value>::type,
+          typename = typename std::enable_if<!detail::is_value<T>::value>::type>
+auto operator==(T&& v, const value<T2>& v2)
+    -> value<decltype(std::declval<V>() == std::declval<T2>())> {
+  return v2.get([](const T2& v2, const V& v) { return v == v2; },
+                std::forward<T>(v));
+}
+// var operator==
+template <typename T, typename T2,
+          typename V2 = typename detail::extract_from<
+              typename std::decay<T2>::type, value>::type>
+auto operator==(const var<T>& v, T2&& v2)
+    -> value<decltype(std::declval<T>() == std::declval<V2>())> {
+  return v.get([](T* v, const V2& v2) { return (*v) == v2; },
+               std::forward<T2>(v2));
+}
+template <typename T, typename T2,
+          typename V = typename detail::extract_from<
+              typename std::decay<T>::type, value>::type,
+          typename = typename std::enable_if<!detail::is_value<T>::value>::type>
+auto operator==(T&& v, const var<T2>& v2)
+    -> value<decltype(std::declval<V>() == std::declval<T2>())> {
+  return v2.get([](T2* v2, const V& v) { return v == (*v2); },
+                std::forward<T>(v));
+}
+template <typename T, typename T2>
+auto operator==(const var<T>& v, const var<T2>& v2)
+    -> value<decltype(std::declval<T>() + std::declval<T2>())> {
+  return v.get([](T* v, T2* v2) { return (*v) == (*v2); }, v2);
 }
 template <typename T>
 struct value {
@@ -192,21 +257,19 @@ struct value {
             typename = typename std::enable_if<!std::is_same<
                 typename std::decay<Args...>::type, value<T>>::value>::type>
   value(Args&&... args) {
-    detail::capture_helper<T> _v =
-        detail::capture(T(std::forward<Args>(args)...));
+    auto _v = detail::capture(T(std::forward<Args>(args)...));
     ptr = std::make_shared<detail::_value<T>>(
         [_v]() mutable { return resolve<T>(std::move(_v.borrow())); });
-  };
+  }
   template <typename U, typename... Args,
             typename Ret = decltype(std::declval<U>()(
                 std::declval<T>(),
                 std::declval<typename detail::extract_from<
                     typename std::decay<Args>::type, value>::type>()...))>
   auto get(U&& fn, Args&&... args) const -> value<Ret> {
-    detail::capture_helper<U> _fn = detail::capture(std::forward<U>(fn));
-    detail::capture_helper<std::tuple<typename std::decay<Args>::type...>>
-        _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
-    value<T> val = *this;
+    auto _fn = detail::capture(std::forward<U>(fn));
+    auto _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    auto val = *this;
     return value<Ret>([val, _fn, _args]() mutable {
       return _value_get_impl::apply(
           std::make_shared<std::tuple<
@@ -227,6 +290,57 @@ struct value {
 
   std::shared_ptr<detail::_value<T>> ptr;
 };
+template <typename T>
+struct value<T*> {
+  template <
+      typename U,
+      typename = typename std::enable_if<
+          (!std::is_same<typename std::decay<U>::type, value<T*>>::value) &&
+          (!std::is_constructible<typename std::decay<T>::type*, U>::value)>::
+          type>
+  value(U&& fn)
+      : ptr(std::make_shared<detail::_value<T*>>(std::forward<U>(fn))){};
+  value(const value<T*>& v) : ptr(v.ptr){};
+  value(value<T*>&& v) : ptr(std::move(v.ptr)){};
+  value(T* val) {
+    ptr = std::make_shared<detail::_value<T*>>(
+        [val]() mutable { return resolve<T*>(std::move(val)); });
+  }
+  template <typename T2, typename V2 = typename detail::extract_from<
+                             typename std::decay<T2>::type, value>::type>
+  auto operator=(T2&& v) -> value<T*> {
+    return get([](T* v, const V2& v2) { return &((*v) = v2); },
+               std::forward<T2>(v));
+  }
+  template <typename U, typename... Args,
+            typename Ret = decltype(std::declval<U>()(
+                std::declval<T*>(),
+                std::declval<typename detail::extract_from<
+                    typename std::decay<Args>::type, value>::type>()...))>
+  auto get(U&& fn, Args&&... args) const -> value<Ret> {
+    auto _fn = detail::capture(std::forward<U>(fn));
+    auto _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    auto val = *this;
+    return value<Ret>([val, _fn, _args]() mutable {
+      return _value_get_impl::apply(
+          std::make_shared<std::tuple<
+              T*, typename detail::extract_from<typename std::decay<Args>::type,
+                                                value>::type...>>(),
+          std::move(_fn.borrow()),
+          std::tuple_cat(std::forward_as_tuple(val), std::move(_args.borrow())),
+          detail::make_index_sequence<sizeof...(Args) + 1>());
+    });
+  }
+
+  template <typename Ctx>
+  promise<void> apply(context<Ctx>&) const {
+    return apply();
+  }
+  promise<void> apply() const { return ptr->apply(); }
+  promise<T*> get() const noexcept { return ptr->get(); }
+
+  std::shared_ptr<detail::_value<T*>> ptr;
+};
 template <>
 struct value<void> {
   template <typename U,
@@ -246,9 +360,8 @@ struct value<void> {
                 std::declval<typename detail::extract_from<
                     typename std::decay<Args>::type, value>::type>()...))>
   auto get(U&& fn, Args&&... args) const -> value<Ret> {
-    detail::capture_helper<U> _fn = detail::capture(std::forward<U>(fn));
-    detail::capture_helper<std::tuple<typename std::decay<Args>::type...>>
-        _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
+    auto _fn = detail::capture(std::forward<U>(fn));
+    auto _args = detail::capture(std::make_tuple(std::forward<Args>(args)...));
     return value<Ret>([_fn, _args]() mutable {
       return _value_get_impl::apply(
           std::make_shared<std::tuple<typename detail::extract_from<
@@ -289,32 +402,59 @@ struct basic_context : public std::enable_shared_from_this<context<T>> {
     });
   }
   template <typename U>
+  static stmt::expr<T> cond(const stmt::value<bool>& v, U&& if_true) {
+    auto _if_true = detail::capture(std::forward<U>(if_true));
+    return stmt::expr<T>([v, _if_true](context<T>& ctx) mutable {
+      return v.apply()
+          .then([v]() { return v.get(); })
+          .then([&ctx, _if_true](bool v) mutable {
+            if (v) {
+              auto tmp_ctx = context<T>::_create(&ctx);
+              _if_true.borrow()(*tmp_ctx);
+            }
+            return resolve();
+          });
+    });
+  }
+  template <typename U, typename U2>
+  static stmt::expr<T> cond(const stmt::value<bool>& v, U&& if_true,
+                            U2&& if_false) {
+    auto _if_true = detail::capture(std::forward<U>(if_true));
+    auto _if_false = detail::capture(std::forward<U2>(if_false));
+    return stmt::expr<T>([v, _if_true, _if_false](context<T>& ctx) mutable {
+      return v.apply()
+          .then([v]() { return v.get(); })
+          .then([&ctx, _if_true, _if_false](bool v) mutable {
+            auto tmp_ctx = context<T>::_create(&ctx);
+            if (v) {
+              _if_true.borrow()(*tmp_ctx);
+            } else {
+              _if_false.borrow()(*tmp_ctx);
+            }
+            return resolve();
+          });
+    });
+  }
+  template <typename U>
   stmt::var<U> create(const std::string& name, U&& v) {
+    using Decay = typename std::decay<U>::type;
     return stmt::var<U>(
-        local
-            .insert_or_assign(
-                name,
-                std::unique_ptr<void, void (*)(void*)>(
-                    new typename std::decay<U>::type(std::forward<U>(obj)),
-                    [](void* ptr) {
-                      using Decay = typename std::decay<U>::type;
-                      ((Decay*)ptr)->~Decay();
-                    }))
-            .second.get());
+        (Decay*)local
+            .insert({name, std::unique_ptr<void, void (*)(void*)>(
+                               new Decay(std::forward<U>(v)),
+                               [](void* ptr) { ((Decay*)ptr)->~Decay(); })})
+            .first->second.get());
   }
   template <typename U>
   stmt::var<U> create(std::string&& name, U&& v) {
+    using Decay = typename std::decay<U>::type;
     return stmt::var<U>(
-        local
-            .insert_or_assign(
-                std::move(name),
-                std::unique_ptr<void, void (*)(void*)>(
-                    new typename std::decay<U>::type(std::forward<U>(obj)),
-                    [](void* ptr) {
-                      using Decay = typename std::decay<U>::type;
-                      ((Decay*)ptr)->~Decay();
-                    }))
-            .second.get());
+        (Decay*)local
+            .insert({std::move(name),
+                     std::unique_ptr<void, void (*)(void*)>(
+                         new Decay(std::forward<U>(v)),
+                         [](void* ptr) { ((Decay*)ptr)->~Decay(); })})
+            .first->second.get());
   }
 
  protected:
@@ -325,9 +465,15 @@ template <typename T>
 struct context : public detail::basic_context<T> {
   template <typename U>
   context& operator<<(U&& v) {
-    detail::capture_helper<U> _v = detail::capture(std::forward<U>(v));
-    std::shared_ptr<context<T>> ptr = this->shared_from_this();
-    chain = chain.then([ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
+    auto _v = detail::capture(std::forward<U>(v));
+    auto ptr = this->shared_from_this();
+    if (parent) {
+      parent->chain = parent->chain.then(
+          [ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
+    } else {
+      chain =
+          chain.then([ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
+    }
     return *this;
   }
   static stmt::expr<T> ret(const stmt::value<T>& v) {
@@ -337,29 +483,69 @@ struct context : public detail::basic_context<T> {
       });
     });
   }
+  template <typename U>
+  stmt::value<U> get(const std::string& name) const {
+    auto it = this->local.find(name);
+    if (it != this->local.cend()) {
+      return stmt::var<U>((U*)it->second.get());
+    }
+    if (parent) {
+      return parent->template get<U>(name);
+    }
+    throw std::invalid_argument("context<void>::get(" + name + ")");
+  }
 
  private:
+  template <typename>
+  friend struct detail::basic_context;
   template <typename U>
   friend promise<T> async(U&&);
-  static std::shared_ptr<context<T>> create() {
-    return std::shared_ptr<context<T>>(new context<T>());
+  static std::shared_ptr<context<T>> create(context<T>* parent) {
+    return std::shared_ptr<context<T>>(new context<T>(parent));
   }
-  promise<T> get_result() const { return result; }
-  void resolve(const T& v) const { result.resolve(v); }
-  void resolve(T&& v) const { result.resolve(std::move(v)); }
-  void reject(const std::exception_ptr& v) const { result.reject(v); }
-  void reject(std::exception_ptr&& v) const { result.reject(std::move(v)); }
-  context() { chain.resolve(); }
+  promise<T> get_result() const {
+    if (parent) return parent->result;
+    return result;
+  }
+  void resolve(const T& v) const {
+    if (parent)
+      parent->result.resolve(v);
+    else
+      result.resolve(v);
+  }
+  void resolve(T&& v) const {
+    if (parent)
+      parent->result.resolve(std::move(v));
+    else
+      result.resolve(std::move(v));
+  }
+  void reject(const std::exception_ptr& v) const {
+    if (parent)
+      parent->result.reject(v);
+    else
+      result.reject(v);
+  }
+  void reject(std::exception_ptr&& v) const {
+    if (parent)
+      parent->result.reject(std::move(v));
+    else
+      result.reject(std::move(v));
+  }
+  context(context<T>* parent) : parent(parent) { chain.resolve(); }
   promise<T> result;
   promise<void> chain;
+  context<T>* parent;
 };
 template <>
 struct context<void> : public detail::basic_context<void> {
   template <typename U>
   context& operator<<(U&& v) {
-    if (result.status() != Fulfilled) {
-      detail::capture_helper<U> _v = detail::capture(std::forward<U>(v));
-      std::shared_ptr<context<void>> ptr = this->shared_from_this();
+    auto _v = detail::capture(std::forward<U>(v));
+    auto ptr = this->shared_from_this();
+    if (parent) {
+      parent->chain = parent->chain.then(
+          [ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
+    } else {
       chain =
           chain.then([ptr, _v]() mutable { return _v.borrow().apply(*ptr); });
     }
@@ -371,20 +557,52 @@ struct context<void> : public detail::basic_context<void> {
       return awacorn::resolve();
     });
   }
+  template <typename U>
+  stmt::value<U> get(const std::string& name) const {
+    auto it = this->local.find(name);
+    if (it != this->local.cend()) {
+      return stmt::var<U>((U*)it->second.get());
+    }
+    if (parent) {
+      return parent->template get<U>(name);
+    }
+    throw std::invalid_argument("context<void>::get(" + name + ")");
+  }
 
  private:
+  template <typename>
+  friend struct detail::basic_context;
   template <typename T, typename U>
   friend promise<T> async(U&&);
-  static std::shared_ptr<context<void>> create() {
-    return std::shared_ptr<context<void>>(new context<void>());
+  static std::shared_ptr<context<void>> _create(context<void>* parent) {
+    return std::shared_ptr<context<void>>(new context<void>(parent));
   }
-  promise<void> get_result() const { return result; }
-  void resolve() const { result.resolve(); }
-  void reject(const std::exception_ptr& v) const { result.reject(v); }
-  void reject(std::exception_ptr&& v) const { result.reject(std::move(v)); }
-  context() { chain.resolve(); };
+  promise<void> get_result() const {
+    if (parent) return parent->result;
+    return result;
+  }
+  void resolve() const {
+    if (parent)
+      parent->result.resolve();
+    else
+      result.resolve();
+  }
+  void reject(const std::exception_ptr& v) const {
+    if (parent)
+      parent->result.reject(v);
+    else
+      result.reject(v);
+  }
+  void reject(std::exception_ptr&& v) const {
+    if (parent)
+      parent->result.reject(std::move(v));
+    else
+      result.reject(std::move(v));
+  }
+  context(context<void>* parent) : parent(parent) { chain.resolve(); };
   promise<void> result;
   promise<void> chain;
+  context<void>* parent;
 };
 /**
  * @brief 开始异步函数。
@@ -396,7 +614,7 @@ struct context<void> : public detail::basic_context<void> {
  */
 template <typename T, typename U>
 promise<T> async(U&& fn) {
-  std::shared_ptr<context<T>> ctx = context<T>::create();
+  auto ctx = context<T>::_create(nullptr);
   fn(*ctx);
   return ctx->get_result();
 }

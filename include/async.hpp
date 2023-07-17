@@ -109,11 +109,10 @@ struct async_fn : basic_async_fn<RetType(context&)>,
       this->ctx._status = async_state_t::Active;
       this->ctx.resume();
       if (this->ctx._status == async_state_t::Awaiting) {
-        std::shared_ptr<async_fn> ref = this->shared_from_this();
+        auto ref = this->shared_from_this();
         promise<RetType> pm;
-        promise<detail::unsafe_any> tmp =
-            std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
-                std::move(this->ctx._result)));
+        auto tmp = std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
+            std::move(this->ctx._result)));
         tmp.then([ref, pm](const detail::unsafe_any& res) {
              ref->ctx._result = res;
              ref->_await_next()
@@ -178,11 +177,10 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
       this->ctx._status = async_state_t::Active;
       this->ctx.resume();
       if (this->ctx._status == async_state_t::Awaiting) {
-        std::shared_ptr<async_fn> ref = this->shared_from_this();
+        auto ref = this->shared_from_this();
         promise<void> pm;
-        promise<detail::unsafe_any> tmp =
-            std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
-                std::move(this->ctx._result)));
+        auto tmp = std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
+            std::move(this->ctx._result)));
         tmp.then([ref, pm](const detail::unsafe_any& res) {
              ref->ctx._result = res;
              ref->_await_next()
