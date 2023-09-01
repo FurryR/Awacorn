@@ -32,6 +32,7 @@ class function<Ret(Args...)> {
 
  public:
   function() = default;
+  function(std::nullptr_t) {}
   /**
    * @brief 由可调用对象构造函数对象。
    *

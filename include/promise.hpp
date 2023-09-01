@@ -17,10 +17,10 @@ namespace awacorn {
 /**
  * @brief promise 的状态。
  */
-enum state_t {
-  Pending = 0,    // 等待中。
-  Fulfilled = 1,  // 已完成。
-  Rejected = 2    // 已失败。
+enum status_t {
+  pending = 0,    // 等待中。
+  fulfilled = 1,  // 已完成。
+  rejected = 2    // 已失败。
 };
 namespace detail {
 struct basic_promise {
@@ -35,16 +35,17 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) mutable {
+      pm->then([t, arg_fn](ArgType&& val) mutable {
         try {
-          auto tmp = arg_fn.borrow()(val);
-          tmp.then([t](const Ret& val) { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          auto tmp = arg_fn.borrow()(std::move(val));
+          tmp.then([t](Ret&& val) { t.resolve(std::move(std::move(val))); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -56,16 +57,17 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) mutable {
+      pm->then([t, arg_fn](ArgType&& val) mutable {
         try {
-          auto tmp = arg_fn.borrow()(val);
+          auto tmp = arg_fn.borrow()(std::move(val));
           tmp.then([t]() { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -81,13 +83,14 @@ struct basic_promise {
       pm->then([t, arg_fn]() mutable {
         try {
           auto tmp = arg_fn.borrow()();
-          tmp.then([t](const Ret& val) { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          tmp.then([t](Ret&& val) { t.resolve(std::move(val)); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -102,12 +105,13 @@ struct basic_promise {
         try {
           auto tmp = arg_fn.borrow()();
           tmp.then([t]() { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -121,14 +125,14 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) mutable {
+      pm->then([t, arg_fn](ArgType&& val) mutable {
         try {
-          t.resolve(arg_fn.borrow()(val));
+          t.resolve(arg_fn.borrow()(std::move(val)));
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -151,15 +155,15 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->then([t, arg_fn](const ArgType& val) mutable {
+      pm->then([t, arg_fn](ArgType&& val) mutable {
         try {
-          arg_fn.borrow()(val);
+          arg_fn.borrow()(std::move(val));
           t.resolve();
         } catch (...) {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -180,7 +184,7 @@ struct basic_promise {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -210,7 +214,7 @@ struct basic_promise {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](const std::exception_ptr& err) { t.reject(err); });
+      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -227,11 +231,12 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& val) mutable {
+      pm->error([t, arg_fn](std::exception_ptr&& val) mutable {
         try {
-          auto tmp = arg_fn.borrow()(val);
-          tmp.then([t](const Ret& val) { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          auto tmp = arg_fn.borrow()(std::move(val));
+          tmp.then([t](Ret&& val) { t.resolve(std::move(val)); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -247,11 +252,12 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& val) mutable {
+      pm->error([t, arg_fn](std::exception_ptr&& val) mutable {
         try {
-          auto tmp = arg_fn.borrow()(val);
+          auto tmp = arg_fn.borrow()(std::move(val));
           tmp.then([t]() { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -269,9 +275,9 @@ struct basic_promise {
     static PromiseT<Ret> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<Ret> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& err) mutable {
+      pm->error([t, arg_fn](std::exception_ptr&& err) mutable {
         try {
-          t.resolve(arg_fn.borrow()(err));
+          t.resolve(arg_fn.borrow()(std::move(err)));
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -297,9 +303,9 @@ struct basic_promise {
     static PromiseT<void> apply(const std::shared_ptr<_promise>& pm, U&& fn) {
       PromiseT<void> t;
       auto arg_fn = detail::capture(std::forward<U>(fn));
-      pm->error([t, arg_fn](const std::exception_ptr& err) mutable {
+      pm->error([t, arg_fn](std::exception_ptr&& err) mutable {
         try {
-          arg_fn.borrow()(err);
+          arg_fn.borrow()(std::move(err));
         } catch (...) {
           t.reject(std::current_exception());
           return;
@@ -322,8 +328,9 @@ struct basic_promise {
       pm->finally([t, arg_fn]() mutable {
         try {
           auto tmp = arg_fn.borrow()();
-          tmp.then([t](const Ret& val) { t.resolve(val); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          tmp.then([t](Ret&& val) { t.resolve(std::move(val)); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -342,7 +349,8 @@ struct basic_promise {
         try {
           auto tmp = arg_fn.borrow()();
           tmp.then([t]() { t.resolve(); });
-          tmp.error([t](const std::exception_ptr& err) { t.reject(err); });
+          tmp.error(
+              [t](std::exception_ptr&& err) { t.reject(std::move(err)); });
         } catch (...) {
           t.reject(std::current_exception());
         }
@@ -429,107 +437,103 @@ struct promise : detail::basic_promise {
   using value_type = typename std::decay<T>::type;
 
  private:
-  struct _promise {
-    using type = detail::function<void(const value_type&)>;
-    using error_type = detail::function<void(const std::exception_ptr&)>;
-    using finally_type = detail::function<void()>;
-    void then(type&& fn) {
-      if (_status == Fulfilled) {
-        fn(get<value_type>(_val));
-      } else if (_status == Pending) {
-        if (_then) {
-          auto arg_then = detail::capture(std::move(_then));
-          auto arg_fn = detail::capture(std::move(fn));
-          _then = [arg_then, arg_fn](const value_type& res) mutable {
-            arg_then.borrow()(res);
-            arg_fn.borrow()(res);
-          };
-        } else
-          _then = std::move(fn);
-      }
-    }
-    void error(error_type&& fn) {
-      if (_status == Rejected) {
-        fn(get<std::exception_ptr>(_val));
-      } else if (_status == Pending) {
-        if (_error) {
-          auto arg_error = detail::capture(std::move(_error));
-          auto arg_fn = detail::capture(std::move(fn));
-          _error = [arg_error, arg_fn](const std::exception_ptr& err) mutable {
-            arg_error.borrow()(err);
-            arg_fn.borrow()(err);
-          };
-        } else
-          _error = std::move(fn);
-      }
-    }
-    void finally(finally_type&& fn) {
-      if (_status != Pending) {
-        fn();
-      } else {
-        if (_finally) {
-          auto arg_finally = detail::capture(std::move(_finally));
-          auto arg_fn = detail::capture(std::move(fn));
-          _finally = [arg_finally, arg_fn]() mutable {
-            arg_finally.borrow()();
-            arg_fn.borrow()();
-          };
-        } else
-          _finally = std::move(fn);
-      }
-    }
-    void resolve(const value_type& val) {
-      if (_status == Pending) {
-        _status = Fulfilled;
-        _val = variant<value_type, std::exception_ptr>(val);
-        if (_then) _then(get<value_type>(_val));
-        if (_finally) _finally();
-        reset();
-      }
-    }
-    void resolve(value_type&& val) {
-      if (_status == Pending) {
-        _status = Fulfilled;
-        _val = variant<value_type, std::exception_ptr>(std::move(val));
-        if (_then) _then(get<value_type>(_val));
-        if (_finally) _finally();
-        reset();
-      }
-    }
-    void reject(const std::exception_ptr& err) {
-      if (_status == Pending) {
-        _status = Rejected;
-        _val = variant<value_type, std::exception_ptr>(err);
-        if (_error) _error(get<std::exception_ptr>(_val));
-        if (_finally) _finally();
-        reset();
-      }
-    }
-    void reject(std::exception_ptr&& err) {
-      if (_status == Pending) {
-        _status = Rejected;
-        _val = variant<value_type, std::exception_ptr>(std::move(err));
-        if (_error) _error(get<std::exception_ptr>(_val));
-        if (_finally) _finally();
-        reset();
-      }
-    }
-    constexpr state_t status() const noexcept { return _status; }
-    _promise() : _status(Pending) {}
-    _promise(const _promise&) = delete;
-    _promise& operator=(const _promise&) = delete;
+  class _promise {
+    status_t pm_status;
+    variant<T, std::exception_ptr> val;
+    detail::function<void(T&&)> then_cb;
+    // NOTE: 虽然说 cppreference 的示例中对 exception_ptr 使用值传递，
+    // 但引用计数的自增/自减是需要承担原子操作的开销的 (锁 bus)
+    // 所以不增加引用计数的右值引用传递方式可能更好。
+    detail::function<void(std::exception_ptr&&)> error_cb;
+    detail::function<void()> finally_cb;
 
-   private:
-    inline void reset() {
-      _then = type();
-      _error = error_type();
-      _finally = finally_type();
+   public:
+    _promise() = default;
+    _promise(const _promise&) = delete;
+    void then(detail::function<void(T&&)>&& _then_cb) {
+      if (pm_status == fulfilled && (!val.valueless_by_exception())) {
+        _then_cb(std::move(get<0>(val)));
+        val = variant<T, std::exception_ptr>();
+      } else if (pm_status == pending && (!then_cb)) {
+        then_cb = std::move(_then_cb);
+      } else if (pm_status != rejected)
+        throw std::logic_error(
+            "Registered callback but the result has been already moved.");
     }
-    state_t _status;
-    type _then;
-    error_type _error;
-    finally_type _finally;
-    variant<value_type, std::exception_ptr> _val;
+    void error(detail::function<void(std::exception_ptr&&)>&& _error_cb) {
+      if (pm_status == rejected && (!val.valueless_by_exception())) {
+        _error_cb(std::move(get<1>(val)));
+        val = variant<T, std::exception_ptr>();
+      } else if (pm_status == pending && (!error_cb)) {
+        error_cb = std::move(_error_cb);
+      } else if (pm_status != fulfilled)
+        throw std::logic_error(
+            "Registered callback but the result has been already moved.");
+    }
+    void finally(detail::function<void()>&& _finally_cb) {
+      if (pm_status == pending) {
+        if (!finally_cb)
+          finally_cb = std::move(_finally_cb);
+        else
+          throw std::logic_error(
+              "Registered callback but the result has been already moved.");
+      } else {
+        _finally_cb();
+      }
+    }
+    void resolve(const T& value) {
+      val = value;
+      pm_status = fulfilled;
+      if (then_cb) {
+        then_cb(std::move(get<0>(val)));
+        val = variant<T, std::exception_ptr>();
+        then_cb = nullptr;
+      }
+      if (finally_cb) finally_cb();
+    }
+    void resolve(T&& value) {
+      val = std::move(value);
+      pm_status = fulfilled;
+      if (then_cb) {
+        then_cb(std::move(get<0>(val)));
+        val = variant<T, std::exception_ptr>();
+        then_cb = nullptr;
+        error_cb = nullptr;
+      }
+      if (finally_cb) {
+        finally_cb();
+        finally_cb = nullptr;
+      }
+    }
+    void reject(const std::exception_ptr& value) {
+      val = value;
+      pm_status = rejected;
+      if (error_cb) {
+        error_cb(std::move(get<1>(val)));
+        val = variant<T, std::exception_ptr>();
+        then_cb = nullptr;
+        error_cb = nullptr;
+      }
+      if (finally_cb) {
+        finally_cb();
+        finally_cb = nullptr;
+      }
+    }
+    void reject(std::exception_ptr&& value) {
+      val = value;
+      pm_status = rejected;
+      if (error_cb) {
+        error_cb(std::move(get<1>(val)));
+        val = variant<T, std::exception_ptr>();
+        then_cb = nullptr;
+        error_cb = nullptr;
+      }
+      if (finally_cb) {
+        finally_cb();
+        finally_cb = nullptr;
+      }
+    }
+    inline constexpr status_t status() const noexcept { return pm_status; }
   };
   std::shared_ptr<_promise> pm;
 
@@ -612,7 +616,7 @@ struct promise : detail::basic_promise {
    *
    * @return Status Promise的状态
    */
-  inline state_t status() const noexcept { return pm->status(); }
+  inline status_t status() const noexcept { return pm->status(); }
   explicit promise() : pm(new _promise()) {}
   promise(const promise& v) : pm(v.pm) {}
   promise(promise&& v) : pm(std::move(v.pm)) {}
@@ -630,97 +634,87 @@ struct promise : detail::basic_promise {
  */
 template <>
 class promise<void> : detail::basic_promise {
-  struct _promise {
-    using type = detail::function<void()>;
-    using error_type = detail::function<void(const std::exception_ptr&)>;
-    using finally_type = detail::function<void()>;
-    void then(type&& fn) {
-      if (_status == Fulfilled) {
-        fn();
-      } else if (_status == Pending) {
-        if (_then) {
-          auto arg_then = detail::capture(std::move(_then));
-          auto arg_fn = detail::capture(std::move(fn));
-          _then = [arg_then, arg_fn]() mutable {
-            arg_then.borrow()();
-            arg_fn.borrow()();
-          };
-        } else
-          _then = std::move(fn);
-      }
+  class _promise {
+    status_t pm_status;
+    std::exception_ptr val;
+    detail::function<void()> then_cb;
+    // NOTE: 虽然说 cppreference 的示例中对 exception_ptr 使用值传递，
+    // 但引用计数的自增/自减是需要承担原子操作的开销的 (锁 bus)
+    // 所以不增加引用计数的右值引用传递方式可能更好。
+    detail::function<void(std::exception_ptr&&)> error_cb;
+    detail::function<void()> finally_cb;
+
+   public:
+    _promise() = default;
+    _promise(const _promise&) = delete;
+    inline void then(detail::function<void()>&& _then_cb) {
+      if (pm_status == fulfilled) {
+        _then_cb();
+      } else if (pm_status == pending && (!then_cb)) {
+        then_cb = std::move(_then_cb);
+      } else if (pm_status != rejected)
+        throw std::logic_error(
+            "Registered callback but the result has been already moved.");
     }
-    void error(error_type&& fn) {
-      if (_status == Rejected) {
-        fn(_val);
-      } else if (_status == Pending) {
-        if (_error) {
-          auto arg_error = detail::capture(std::move(_error));
-          auto arg_fn = detail::capture(std::move(fn));
-          _error = [arg_error, arg_fn](const std::exception_ptr& err) mutable {
-            arg_error.borrow()(err);
-            arg_fn.borrow()(err);
-          };
-        } else
-          _error = std::move(fn);
-      }
+    inline void error(
+        detail::function<void(std::exception_ptr&&)>&& _error_cb) {
+      if (pm_status == rejected && val) {
+        _error_cb(std::move(val));
+        val = nullptr;
+      } else if (pm_status == pending && (!error_cb)) {
+        error_cb = std::move(_error_cb);
+      } else if (pm_status != fulfilled)
+        throw std::logic_error(
+            "Registered callback but the result has been already moved.");
     }
-    void finally(finally_type&& fn) {
-      if (_status != Pending) {
-        fn();
+    inline void finally(detail::function<void()>&& _finally_cb) {
+      if (pm_status == pending) {
+        if (!finally_cb)
+          finally_cb = std::move(_finally_cb);
+        else
+          throw std::logic_error(
+              "Registered callback but the result has been already moved.");
       } else {
-        if (_finally) {
-          auto arg_finally = detail::capture(std::move(_finally));
-          auto arg_fn = detail::capture(std::move(fn));
-          _finally = [arg_finally, arg_fn]() mutable {
-            arg_finally.borrow()();
-            arg_fn.borrow()();
-          };
-        } else
-          _finally = std::move(fn);
+        _finally_cb();
       }
     }
     void resolve() {
-      if (_status == Pending) {
-        _status = Fulfilled;
-        if (_then) _then();
-        if (_finally) _finally();
-        reset();
+      pm_status = fulfilled;
+      if (then_cb) {
+        then_cb();
+        then_cb = nullptr;
+      }
+      if (finally_cb) finally_cb();
+    }
+    void reject(const std::exception_ptr& value) {
+      val = value;
+      pm_status = rejected;
+      if (error_cb) {
+        error_cb(std::move(val));
+        val = nullptr;
+        then_cb = nullptr;
+        error_cb = nullptr;
+      }
+      if (finally_cb) {
+        finally_cb();
+        finally_cb = nullptr;
       }
     }
-    void reject(const std::exception_ptr& err) {
-      if (_status == Pending) {
-        _status = Rejected;
-        _val = err;
-        if (_error) _error(_val);
-        if (_finally) _finally();
-        reset();
+    void reject(std::exception_ptr&& value) {
+      val = value;
+      pm_status = rejected;
+      if (error_cb) {
+        error_cb(std::move(val));
+        val = nullptr;
+        then_cb = nullptr;
+        error_cb = nullptr;
+      }
+      if (finally_cb) {
+        finally_cb();
+        finally_cb = nullptr;
       }
     }
-    void reject(std::exception_ptr&& err) {
-      if (_status == Pending) {
-        _status = Rejected;
-        _val = std::move(err);
-        if (_error) _error(_val);
-        if (_finally) _finally();
-        reset();
-      }
-    }
-    constexpr state_t status() const noexcept { return _status; }
-    _promise(const _promise&) = delete;
-    _promise& operator=(const _promise&) = delete;
-    _promise() : _status(Pending) {}
-
-   private:
-    void reset() {
-      _then = type();
-      _error = error_type();
-      _finally = finally_type();
-    }
-    state_t _status;
-    type _then;
-    error_type _error;
-    finally_type _finally;
-    std::exception_ptr _val;
+    inline constexpr status_t status() const noexcept { return pm_status; }
   };
   std::shared_ptr<_promise> pm;
 
@@ -800,7 +794,7 @@ class promise<void> : detail::basic_promise {
    *
    * @return Status Promise的状态
    */
-  inline state_t status() const noexcept { return pm->status(); }
+  inline status_t status() const noexcept { return pm->status(); }
   explicit promise() : pm(new _promise()) {}
   promise(const promise& v) : pm(v.pm) {}
   promise(promise&& v) : pm(std::move(v.pm)) {}
@@ -1023,11 +1017,11 @@ static inline promise<std::tuple<promise<Args>...>> all_settled(
 }
 }  // namespace gather
 /**
- * @brief 返回一个已经 Fulfilled 的 Promise。
+ * @brief 返回一个已经 fulfilled 的 Promise。
  *
  * @tparam Value promise 类型
  * @param val 可选，Promise的值。
- * @return promise<Value> 已经 Fulfilled 的 promise
+ * @return promise<Value> 已经 fulfilled 的 promise
  */
 template <typename Value>
 inline promise<Value> resolve(Value&& val) {
@@ -1055,11 +1049,11 @@ inline promise<Value> resolve(promise<Value>&& val) {
   return val;
 }
 /**
- * @brief 返回一个 Rejected 的 Promise。
+ * @brief 返回一个 rejected 的 Promise。
  *
  * @tparam Value promise 类型
  * @param err 错误内容。
- * @return promise<Value> 已经 Rejected 的 promise
+ * @return promise<Value> 已经 rejected 的 promise
  */
 template <typename Value>
 inline promise<Value> reject(const std::exception_ptr& err) {

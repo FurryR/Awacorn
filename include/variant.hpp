@@ -323,9 +323,7 @@ class variant {
    * @param v variant 对象。
    */
   inline void swap(variant& v) noexcept {
-    std::swap(v._idx, _idx);
-    std::swap(v._manager, _manager);
-    std::swap(v._ptr, _ptr);
+    std::swap(*this, v);
   }
   constexpr variant() : _manager(nullptr), _idx(variant_npos){};
   /**
@@ -351,10 +349,13 @@ class variant {
       _manager(clone, v._ptr, _ptr);
     }
   }
-  variant(variant&& v) : _manager(v._manager), _idx(v._idx) {
-    if (_idx == variant_npos) {
-      _manager(move, v._ptr, _ptr);
+  variant(variant&& v) {
+    if (_idx != variant_npos) {
+      _manager(destroy, nullptr, _ptr);
     }
+    _manager = v._manager;
+    _idx = v._idx;
+    if (_idx != variant_npos) _manager(move, v._ptr, _ptr);
   }
   variant& operator=(const variant& v) {
     if (_idx != variant_npos) {
@@ -362,16 +363,16 @@ class variant {
     }
     _manager = v._manager;
     _idx = v._idx;
-    _manager(clone, v._ptr, _ptr);
+    if (_idx != variant_npos) _manager(clone, v._ptr, _ptr);
     return *this;
   }
   variant& operator=(variant&& v) {
     if (_idx != variant_npos) {
       _manager(destroy, nullptr, _ptr);
     }
-    _idx = v._idx;
     _manager = v._manager;
-    _manager(move, v._ptr, _ptr);
+    _idx = v._idx;
+    if (_idx != variant_npos) _manager(move, v._ptr, _ptr);
     return *this;
   }
   ~variant() {
@@ -399,7 +400,7 @@ using unique_variant = typename detail::make_unique<variant<Args...>>::type;
  */
 template <std::size_t idx, typename... Args>
 typename detail::index_type<idx, Args...>::type* get_if(
-    variant<Args...>&& v) noexcept {
+    variant<Args...>& v) noexcept {
   static_assert(idx < sizeof...(Args), "ill-formed cast");
   if (v.index() == idx) {
     return (typename detail::index_type<idx, Args...>::type*)v._ptr;
@@ -425,7 +426,7 @@ const typename detail::index_type<idx, Args...>::type* get_if(
  * @return constexpr decltype(auto) std::get_if<T>(v) 的返回值。
  */
 template <typename T, typename... Args>
-T* get_if(variant<Args...>&& v) noexcept {
+T* get_if(variant<Args...>& v) noexcept {
   static_assert(detail::type_index<T, Args...>::value != (std::size_t)-1,
                 "ill-formed cast");
   if (v.index() == detail::type_index<T, Args...>::value) {
@@ -454,7 +455,7 @@ const T* get_if(const variant<Args...>& v) noexcept {
  * @return decltype(auto) std::get<I>(v) 的返回值。
  */
 template <std::size_t idx, typename... Args>
-inline auto get(variant<Args...>&& v) -> decltype(*get_if<idx>(v)) {
+inline auto get(variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
   static_assert(idx < sizeof...(Args), "ill-formed cast");
   auto ptr = get_if<idx>(v);
   if (ptr) return *ptr;
@@ -478,7 +479,7 @@ inline auto get(const variant<Args...>& v) -> decltype(*get_if<idx>(v)) {
  * @return constexpr decltype(auto) std::get<T>(v) 的返回值。
  */
 template <typename T, typename... Args>
-inline auto get(variant<Args...>&& v) -> decltype(*get_if<T>(v)) {
+inline auto get(variant<Args...>& v) -> decltype(*get_if<T>(v)) {
   static_assert(detail::type_index<T, Args...>::value != (std::size_t)-1,
                 "ill-formed cast");
   auto ptr = get_if<T>(v);

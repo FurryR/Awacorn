@@ -22,7 +22,7 @@ namespace detail {
  * @brief 生成器的状态。
  */
 enum class async_state_t {
-  Pending = 0,   // 尚未运行
+  pending = 0,   // 尚未运行
   Active = 1,    // 运行中
   Returned = 2,  // 已返回
   Awaiting = 3,  // await 中
@@ -74,7 +74,7 @@ struct context {
 
  private:
   context(void (*fn)(void*), void* arg, std::size_t stack_size = 0)
-      : _status(detail::async_state_t::Pending),
+      : _status(detail::async_state_t::pending),
         _ctx(fn, arg, stack_size),
         _failbit(false) {}
   inline void resume() { _ctx.resume(); }
@@ -105,7 +105,7 @@ struct async_fn : basic_async_fn<RetType(context&)>,
                   std::enable_shared_from_this<async_fn<RetType>> {
   explicit async_fn(const async_fn&) = delete;
   promise<RetType> next() {
-    if (this->ctx._status == async_state_t::Pending) {
+    if (this->ctx._status == async_state_t::pending) {
       this->ctx._status = async_state_t::Active;
       this->ctx.resume();
       if (this->ctx._status == async_state_t::Awaiting) {
@@ -149,7 +149,7 @@ struct async_fn : basic_async_fn<RetType(context&)>,
 
  private:
   inline promise<RetType> _await_next() {
-    this->ctx._status = async_state_t::Pending;
+    this->ctx._status = async_state_t::pending;
     return this->next();
   }
   template <typename U>
@@ -173,7 +173,7 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
   explicit async_fn(const async_fn&) = delete;
   async_fn& operator=(const async_fn&) = delete;
   promise<void> next() {
-    if (this->ctx._status == async_state_t::Pending) {
+    if (this->ctx._status == async_state_t::pending) {
       this->ctx._status = async_state_t::Active;
       this->ctx.resume();
       if (this->ctx._status == async_state_t::Awaiting) {
@@ -215,7 +215,7 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
 
  private:
   inline promise<void> _await_next() {
-    this->ctx._status = async_state_t::Pending;
+    this->ctx._status = async_state_t::pending;
     return this->next();
   }
   template <typename U>
