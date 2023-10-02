@@ -92,5 +92,5 @@ Awacorn 和通常的 C++ 协程有什么区别？
 
 ---
 
-_`<p align="center">` Awacorn version 3.1.0. `</p>`_
-_`<p align="center">` This program was under the [MIT](./LICENSE) license. `</p>`_
+_<p align="center"> Awacorn version 3.1.0. </p>_
+_<p align="center"> This program was under the [MIT](./LICENSE) license. </p>_
