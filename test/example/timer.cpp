@@ -2,6 +2,7 @@
 
 #include "event.hpp"
 #include "promise.hpp"
+#include "async.hpp"
 using namespace awacorn;
 template <typename Rep, typename Period>
 promise<void> sleep(event_loop* ev,
@@ -12,10 +13,10 @@ promise<void> sleep(event_loop* ev,
 }
 int main() {
   event_loop ev;
-  gather::any(sleep(&ev, std::chrono::seconds(2)),
-              sleep(&ev, std::chrono::seconds(1)))
-      .then([](const awacorn::variant<awacorn::monostate>&) {
-        std::cout << "Hello World!" << std::endl;
-      });
+  awacorn::async([&ev](awacorn::context& ctx) {
+    ctx >> gather::any(sleep(&ev, std::chrono::seconds(2)),
+                       sleep(&ev, std::chrono::seconds(1)));
+    std::cout << "Hello World!" << std::endl;
+  });
   ev.start();
 }

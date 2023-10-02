@@ -48,11 +48,11 @@ struct context {
    * @return T promise 的结果。
    */
   template <typename T>
-  T&& operator>>(const promise<T>& value) {
+  T operator>>(const promise<T>& value) {
     if (_status != detail::async_state_t::Active)
       throw std::bad_function_call();
     _status = detail::async_state_t::Awaiting;
-    _result = value.then([](const T& v) { return detail::unsafe_any(v); });
+    _result = value.then([](T&& v) { return detail::unsafe_any(std::move(v)); });
     resume();
     if (_failbit) {
       _failbit = false;
@@ -113,20 +113,20 @@ struct async_fn : basic_async_fn<RetType(context&)>,
         promise<RetType> pm;
         auto tmp = std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
             std::move(this->ctx._result)));
-        tmp.then([ref, pm](const detail::unsafe_any& res) {
-             ref->ctx._result = res;
+        tmp.then([ref, pm](detail::unsafe_any&& res) {
+             ref->ctx._result = std::move(res);
              ref->_await_next()
-                 .then([pm](const RetType& res) { pm.resolve(res); })
+                 .then([pm](RetType&& res) { pm.resolve(std::move(res)); })
                  .error(
-                     [pm](const std::exception_ptr& err) { pm.reject(err); });
+                     [pm](std::exception_ptr&& err) { pm.reject(std::move(err)); });
            })
-            .error([ref, pm](const std::exception_ptr& err) {
-              ref->ctx._result = err;
+            .error([ref, pm](std::exception_ptr&& err) {
+              ref->ctx._result = std::move(err);
               ref->ctx._failbit = true;
               ref->_await_next()
-                  .then([pm](const RetType& res) { pm.resolve(res); })
+                  .then([pm](RetType&& res) { pm.resolve(std::move(res)); })
                   .error(
-                      [pm](const std::exception_ptr& err) { pm.reject(err); });
+                      [pm](std::exception_ptr&& err) { pm.reject(std::move(err)); });
             });
         return pm;
       } else if (this->ctx._status == async_state_t::Returned) {
@@ -181,20 +181,20 @@ struct async_fn<void> : basic_async_fn<void(context&)>,
         promise<void> pm;
         auto tmp = std::move(detail::unsafe_cast<promise<detail::unsafe_any>>(
             std::move(this->ctx._result)));
-        tmp.then([ref, pm](const detail::unsafe_any& res) {
-             ref->ctx._result = res;
+        tmp.then([ref, pm](detail::unsafe_any&& res) {
+             ref->ctx._result = std::move(res);
              ref->_await_next()
                  .then([pm]() { pm.resolve(); })
                  .error(
-                     [pm](const std::exception_ptr& err) { pm.reject(err); });
+                     [pm](std::exception_ptr&& err) { pm.reject(std::move(err)); });
            })
-            .error([ref, pm](const std::exception_ptr& err) {
-              ref->ctx._result = err;
+            .error([ref, pm](std::exception_ptr&& err) {
+              ref->ctx._result = std::move(err);
               ref->ctx._failbit = true;
               ref->_await_next()
                   .then([pm]() { pm.resolve(); })
                   .error(
-                      [pm](const std::exception_ptr& err) { pm.reject(err); });
+                      [pm](std::exception_ptr&& err) { pm.reject(std::move(err)); });
             });
         return pm;
       } else if (this->ctx._status == async_state_t::Returned) {

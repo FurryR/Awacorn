@@ -214,7 +214,7 @@ struct basic_promise {
           t.reject(std::current_exception());
         }
       });
-      pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
+      // pm->error([t](std::exception_ptr&& err) { t.reject(std::move(err)); });
       return t;
     }
   };
@@ -832,15 +832,16 @@ struct promise_all {
                            const promise<T>& current, Args&&... args) {
     promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                           std::forward<Args>(args)...);
-    current.then([result, done_count, pm](const T& value) {
-      if (result) {
-        std::get<N>(*result) = value;
-        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
-          pm.resolve(std::move(*result));
-        }
-      }
-    });
-    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
+    current
+        .then([result, done_count, pm](T&& value) {
+          if (result) {
+            std::get<N>(*result) = std::move(value);
+            if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+              pm.resolve(std::move(*result));
+            }
+          }
+        })
+        .error([pm](std::exception_ptr&& v) { pm.reject(std::move(v)); });
   }
   template <typename... Args>
   static inline void apply(const promise<ResultType>& pm,
@@ -849,15 +850,16 @@ struct promise_all {
                            const promise<void>& current, Args&&... args) {
     promise_all<ResultType, N - 1>::apply(pm, result, done_count,
                                           std::forward<Args>(args)...);
-    current.then([result, done_count, pm]() {
-      if (result) {
-        std::get<N>(*result) = monostate();
-        if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
-          pm.resolve(std::move(*result));
-        }
-      }
-    });
-    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
+    current
+        .then([result, done_count, pm]() {
+          if (result) {
+            std::get<N>(*result) = monostate();
+            if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
+              pm.resolve(std::move(*result));
+            }
+          }
+        })
+        .error([pm](std::exception_ptr&& v) { pm.reject(std::move(v)); });
   }
   static inline void apply(const promise<ResultType>&,
                            const std::shared_ptr<ResultType>&,
@@ -873,13 +875,13 @@ struct promise_any {
       Args&&... args) {
     promise_any<TOTAL, N - 1>::apply(pm, exce, fail_count,
                                      std::forward<Args>(args)...);
-    current.then([pm](const T& v) { pm.resolve(ResultType(v)); });
-    current.error([pm, fail_count, exce](const std::exception_ptr& v) {
-      (*exce)[N] = v;
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(std::make_exception_ptr(std::move(*exce)));
-      }
-    });
+    current.then([pm](T&& v) { pm.resolve(ResultType(std::move(v))); })
+        .error([pm, fail_count, exce](std::exception_ptr&& v) {
+          (*exce)[N] = std::move(v);
+          if ((++(*fail_count)) == TOTAL) {
+            pm.reject(std::make_exception_ptr(std::move(*exce)));
+          }
+        });
   }
   template <typename ResultType, typename... Args>
   static inline void apply(
@@ -889,13 +891,13 @@ struct promise_any {
       const promise<void>& current, Args&&... args) {
     promise_any<TOTAL, N - 1>::apply(pm, exce, fail_count,
                                      std::forward<Args>(args)...);
-    current.then([pm]() { pm.resolve(ResultType(monostate())); });
-    current.error([pm, fail_count, exce](const std::exception_ptr& v) {
-      (*exce)[N] = v;
-      if ((++(*fail_count)) == TOTAL) {
-        pm.reject(std::make_exception_ptr(std::move(*exce)));
-      }
-    });
+    current.then([pm]() { pm.resolve(ResultType(monostate())); })
+        .error([pm, fail_count, exce](std::exception_ptr&& v) {
+          (*exce)[N] = std::move(v);
+          if ((++(*fail_count)) == TOTAL) {
+            pm.reject(std::make_exception_ptr(std::move(*exce)));
+          }
+        });
   }
   template <typename ResultType>
   static void apply(
@@ -908,15 +910,15 @@ struct promise_race {
   static inline void apply(const promise<ResultType>& pm,
                            const promise<T>& current, Args&&... args) {
     promise_race::apply(pm, std::forward<Args>(args)...);
-    current.then([pm](const T& v) { pm.resolve(ResultType(v)); });
-    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
+    current.then([pm](T&& v) { pm.resolve(ResultType(std::move(v))); })
+        .error([pm](std::exception_ptr&& v) { pm.reject(std::move(v)); });
   }
   template <typename ResultType, typename... Args>
   static inline void apply(const promise<ResultType>& pm,
                            const promise<void>& current, Args&&... args) {
     promise_race::apply(pm, std::forward<Args>(args)...);
-    current.then([pm]() { pm.resolve(ResultType(monostate())); });
-    current.error([pm](const std::exception_ptr& v) { pm.reject(v); });
+    current.then([pm]() { pm.resolve(ResultType(monostate())); })
+        .error([pm](std::exception_ptr&& v) { pm.reject(std::move(v)); });
   }
   template <typename ResultType>
   static void apply(const promise<ResultType>&) {}
@@ -930,9 +932,9 @@ struct promise_all_settled {
                            const promise<T>& current, Args&&... args) {
     promise_all_settled<ResultType, N - 1>::apply(pm, result, done_count,
                                                   std::forward<Args>(args)...);
-    current.finally([result, done_count, current, pm]() {
+    current.finally([result, done_count, current, pm]() mutable {
       if (result) {
-        std::get<N>(*result) = current;
+        std::get<N>(*result) = std::move(current);
         if ((++(*done_count)) == std::tuple_size<ResultType>::value) {
           pm.resolve(std::move(*result));
         }
