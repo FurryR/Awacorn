@@ -450,6 +450,12 @@ struct promise : detail::basic_promise {
    public:
     _promise() = default;
     _promise(const _promise&) = delete;
+    ~_promise() {
+      if (pm_status == rejected && !val.valueless_by_exception()) {
+        // Aborted due to unhandled rejection
+        std::abort();
+      }
+    }
     void then(detail::function<void(T&&)>&& _then_cb) {
       if (pm_status == fulfilled && (!val.valueless_by_exception())) {
         _then_cb(std::move(get<0>(val)));
@@ -489,7 +495,10 @@ struct promise : detail::basic_promise {
         val = variant<T, std::exception_ptr>();
         then_cb = nullptr;
       }
-      if (finally_cb) finally_cb();
+      if (finally_cb) {
+        finally_cb();
+        finally_cb = nullptr;
+      }
     }
     void resolve(T&& value) {
       val = std::move(value);
@@ -647,6 +656,12 @@ class promise<void> : detail::basic_promise {
    public:
     _promise() = default;
     _promise(const _promise&) = delete;
+    ~_promise() {
+      if (pm_status == rejected && val) {
+        // Aborted due to unhandled rejection
+        std::abort();
+      }
+    }
     inline void then(detail::function<void()>&& _then_cb) {
       if (pm_status == fulfilled) {
         _then_cb();

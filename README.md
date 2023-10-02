@@ -1,4 +1,4 @@
-# `<p align="center">`awacorn `</p>`
+# <p align="center"> awacorn </p>
 
 [![CodeFactor](https://www.codefactor.io/repository/github/furryr/awacorn/badge)](https://www.codefactor.io/repository/github/furryr/awacorn)
 
@@ -21,7 +21,7 @@ int main() {
 
 ## 目录
 
-- [`<p align="center">`awacorn `</p>`](#p-aligncenterawacorn-p)
+- [ awacorn ](#-awacorn-)
   - [目录](#目录)
   - [什么是 awacorn](#什么是-awacorn)
   - [区别](#区别)
@@ -86,7 +86,7 @@ Awacorn 和通常的 C++ 协程有什么区别？
 | `async`              | `async/await` 有栈协程。                        | (`boost` \| `ucontext`) & `promise` | 🐱<br>[async](doc/async.md)                   |
 | `function`           | Awacorn 采用的内部 `std::function` 实现。       | void                                | 🐻<br>[function](doc/function.md)             |
 | `capture`            | Awacorn 采用的内部万能捕获实现。                | void                                | 🐂<br>[capture](doc/capture.md)               |
-| `experimental/async` | Awacorn 最新的无栈携程。                        | void                                | 🐱<br>[experimental/async](doc/async-next.md) |
+| `experimental/async` | Awacorn 最新的无栈协程。                        | void                                | 🐱<br>[experimental/async](doc/async-next.md) |
 
 🔰 点击 **文档** 即可查看组件相关的 **详细文档**。
 

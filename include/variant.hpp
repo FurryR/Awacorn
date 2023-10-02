@@ -349,12 +349,7 @@ class variant {
       _manager(clone, v._ptr, _ptr);
     }
   }
-  variant(variant&& v) {
-    if (_idx != variant_npos) {
-      _manager(destroy, nullptr, _ptr);
-    }
-    _manager = v._manager;
-    _idx = v._idx;
+  variant(variant&& v): _manager(v._manager), _idx(v._idx) {
     if (_idx != variant_npos) _manager(move, v._ptr, _ptr);
   }
   variant& operator=(const variant& v) {
