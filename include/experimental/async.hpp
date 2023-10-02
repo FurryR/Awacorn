@@ -793,9 +793,7 @@ AWACORN_ASYNC_CONTEXT(void, <void>, AWACORN_ASYNC_CONTEXT_HANDLE_RET_VOID)
       chain.push_back(v);                                              \
       return *this;                                                    \
     }                                                                  \
-    ret_code                                                           \
-                                                                       \
-        private : asyncfn() = default;                                 \
+    ret_code private : asyncfn() = default;                            \
     friend class detail::basic_fn<T>;                                  \
     template <typename U, typename Ret>                                \
     friend promise<Ret> async(U&&);                                    \
@@ -809,16 +807,15 @@ AWACORN_ASYNC_CONTEXT(void, <void>, AWACORN_ASYNC_CONTEXT_HANDLE_RET_VOID)
             return it.apply(*ptr);                                     \
           return resolve();                                            \
         });                                                            \
-        pm.error([ptr](std::exception_ptr&& e) {                       \
-          ptr->unhandled_err(std::move(e));                            \
-        });                                                            \
       }                                                                \
       pm.then([ctx]() mutable {                                        \
-        if (ctx->get_result().status() == status_t::pending) {         \
-          noreturn_behavior                                            \
-        }                                                              \
+          if (ctx->get_result().status() == status_t::pending) {       \
+            noreturn_behavior                                          \
+          }                                                            \
+        }).error([ctx](std::exception_ptr&& e) {                       \
+        ctx->unhandled_err(std::move(e));                              \
       });                                                              \
-      return ptr->get_result();                                        \
+      return ctx->get_result();                                        \
     }                                                                  \
     std::list<expr<void>> chain;                                       \
   };
